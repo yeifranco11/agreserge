@@ -1,6 +1,0 @@
-{
-  "version": 3,
-  "sources": [],
-  "sections": [
-    {"offset": {"line": 16, "column": 0}, "map": {"version":3,"sources":["turbopack:///[project]/middleware.js"],"sourcesContent":["import { NextResponse } from 'next/server';\nexport function middleware(req){\n  const protectedPath = req.nextUrl.pathname.startsWith('/intranet');\n  const session = req.cookies.get('agreserge_session')?.value;\n  if(protectedPath && !session){ return NextResponse.redirect(new URL('/', req.url)); }\n  return NextResponse.next();\n}\nexport const config = { matcher: ['/intranet/:path*'] };\n"],"names":["middleware","req","protectedPath","nextUrl","pathname","startsWith","session","cookies","get","value","redirect","URL","url","next","config","matcher"],"mappings":";;;;;;AAAA;AAAA;;AACO,SAASA,WAAWC,GAAG;IAC5B,MAAMC,gBAAgBD,IAAIE,OAAO,CAACC,QAAQ,CAACC,UAAU,CAAC;IACtD,MAAMC,UAAUL,IAAIM,OAAO,CAACC,GAAG,CAAC,sBAAsBC;IACtD,IAAGP,iBAAiB,CAACI,SAAQ;QAAE,OAAO,6MAAY,CAACI,QAAQ,CAAC,IAAIC,IAAI,KAAKV,IAAIW,GAAG;IAAI;IACpF,OAAO,6MAAY,CAACC,IAAI;AAC1B;AACO,MAAMC,SAAS;IAAEC,SAAS;QAAC;KAAmB;AAAC"}}]
-}

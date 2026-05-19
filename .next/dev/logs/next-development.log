@@ -1,4 +1,0 @@
-{"timestamp":"00:00:02.511","source":"Server","level":"WARN","message":"⚠ The \"middleware\" file convention is deprecated. Please use \"proxy\" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy"}
-{"timestamp":"00:00:03.156","source":"Server","level":"WARN","message":"⚠ Duplicate page detected. app\\page.jsx and app\\page.tsx resolve to /"}
-{"timestamp":"00:00:03.158","source":"Server","level":"WARN","message":"⚠ Duplicate page detected. app\\page.jsx and app\\page.tsx resolve to /"}
-{"timestamp":"00:00:03.161","source":"Server","level":"LOG","message":""}
