@@ -2,3 +2,4 @@
 {"timestamp":"00:00:03.156","source":"Server","level":"WARN","message":"⚠ Duplicate page detected. app\\page.jsx and app\\page.tsx resolve to /"}
 {"timestamp":"00:00:03.158","source":"Server","level":"WARN","message":"⚠ Duplicate page detected. app\\page.jsx and app\\page.tsx resolve to /"}
 {"timestamp":"00:00:03.161","source":"Server","level":"LOG","message":""}
+{"timestamp":"00:29:24.386","source":"Browser","level":"INFO","message":"%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"}
