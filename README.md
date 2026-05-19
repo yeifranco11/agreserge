@@ -1,36 +1,46 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AGRESERGE DEL VALLE - Intranet SaaS Empresarial
 
-## Getting Started
-
-First, run the development server:
+## Cómo ejecutar
+1. Abrir esta carpeta en Visual Studio Code.
+2. Ejecutar en terminal:
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+3. Abrir en el navegador:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+http://localhost:3000
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Usuarios demo
+- Administrador del sistema: admin@agreserge.com / 1234
+- Administrativo AGRESERGE: documental@agreserge.com / 1234
+- Líder: lider@agreserge.com / 1234
+- Agremiado: agremiado@agreserge.com / 1234
 
-## Learn More
+## Funcionalidades incluidas
+- Login funcional con sesión persistente en localStorage y cookie.
+- Roles reales en interfaz: administrador, administrativo, líder y agremiado.
+- Middleware/proxy básico para rutas protegidas.
+- Dashboard ejecutivo.
+- Parametrización de instituciones, áreas, usuarios, líderes y asignaciones.
+- ERP documental con filtros por institución, área, tipo y búsqueda.
+- Checklist documental asistencial y administrativo.
+- Ficha técnica del agremiado.
+- Cargue, estado, vencimiento, comentarios y vista previa simulada de documentos.
+- Diagnóstico de IA documental simulada.
+- Gestión de anexos contractuales e informe de actividades.
+- Asignación de anexos a líderes.
+- Acceso de líderes solo a anexos/agremiados asignados.
+- Consolidación de informe de actividades en archivo descargable.
+- Google Docs integrado mediante enlaces editables.
+- Estadísticas, reportes y análisis.
+- Auditoría y trazabilidad.
+- Cambio de clave.
+- Sistema en español.
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Nota técnica
+Esta versión funciona como prototipo frontend empresarial con base de datos simulada en localStorage del navegador. Para producción se recomienda conectar Supabase/PostgreSQL, almacenamiento de archivos y autenticación real con políticas RLS.

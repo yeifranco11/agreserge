@@ -1,0 +1,8 @@
+{"timestamp":"00:00:03.170","source":"Server","level":"WARN","message":"⚠ The \"middleware\" file convention is deprecated. Please use \"proxy\" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy"}
+{"timestamp":"00:00:03.793","source":"Server","level":"WARN","message":"⚠ Duplicate page detected. app\\page.jsx and app\\page.tsx resolve to /"}
+{"timestamp":"00:00:03.794","source":"Server","level":"WARN","message":"⚠ Duplicate page detected. app\\page.jsx and app\\page.tsx resolve to /"}
+{"timestamp":"00:00:03.797","source":"Server","level":"LOG","message":""}
+{"timestamp":"00:00:05.525","source":"Browser","level":"INFO","message":"%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"}
+{"timestamp":"00:00:28.379","source":"Browser","level":"INFO","message":"%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"}
+{"timestamp":"00:00:30.648","source":"Browser","level":"INFO","message":"%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"}
+{"timestamp":"00:01:20.578","source":"Browser","level":"INFO","message":"%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"}

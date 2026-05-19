@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 4, "column": 0}, "map": {"version":3,"sources":["file:///C:/Users/Usuario/Desktop/agreserge/app/layout.tsx"],"sourcesContent":["import './globals.css';\nexport const metadata={title:'Intranet AGRESERGE',description:'Gestión institucional AGRESERGE'};\nexport default function RootLayout({children}:{children:React.ReactNode}){return <html lang=\"es\"><body>{children}</body></html>}\n"],"names":["metadata","title","description","RootLayout","children","lang"],"mappings":";;;;;;;;;AACO,MAAMA,WAAS;IAACC,OAAM;IAAqBC,aAAY;AAAiC;AAChF,SAASC,WAAW,EAACC,QAAQ,EAA4B;IAAE,qBAAO,8OAAC;QAAKC,MAAK;kBAAK,cAAA,8OAAC;sBAAMD;;;;;;;;;;;AAAuB"}},
+    {"offset": {"line": 41, "column": 0}, "map": {"version":3,"sources":["file:///C:/Users/Usuario/Desktop/agreserge/node_modules/next/src/server/route-modules/app-page/vendored/rsc/react-jsx-dev-runtime.ts"],"sourcesContent":["module.exports = (\n  require('../../module.compiled') as typeof import('../../module.compiled')\n).vendored['react-rsc']!.ReactJsxDevRuntime\n"],"names":["module","exports","require","vendored","ReactJsxDevRuntime"],"mappings":"AAAAA,OAAOC,OAAO,GACZC,QAAQ,4HACRC,QAAQ,CAAC,YAAY,CAAEC,kBAAkB","ignoreList":[0]}}]
+}
