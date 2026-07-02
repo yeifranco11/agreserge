@@ -6,7 +6,9 @@ const MAX_AGE = 60 * 60 * 24 * 7;
 
 function secret() {
   const value = process.env.APP_SESSION_SECRET;
-  if (!value || value.length < 32) throw new Error('Falta APP_SESSION_SECRET en .env.local');
+  if (!value || value.length < 32) {
+    throw new Error('Falta configurar en Vercel: APP_SESSION_SECRET debe tener minimo 32 caracteres');
+  }
   return value;
 }
 

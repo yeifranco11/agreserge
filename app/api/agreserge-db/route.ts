@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { getSessionUserId } from '../../../lib/agreserge-auth';
 import { loadDB, saveFullDB } from '../../../lib/agreserge-db';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   const userId = await getSessionUserId();
   if (!userId) return NextResponse.json({ error: 'Sesión requerida' }, { status: 401 });

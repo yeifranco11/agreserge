@@ -135,14 +135,14 @@ export async function loadDB() {
   if (error) throw error;
 
   const docs: Record<string, any[]> = {};
-  for (const row of documents.data ?? []) {
+  for (const row of ((documents.data ?? []) as any[])) {
     docs[row.agremiado_id] = docs[row.agremiado_id] ?? [];
     docs[row.agremiado_id].push(documentFromRow(row));
   }
 
   return {
-    usuarios: (users.data ?? []).map(userFromRow),
-    entidades: (entities.data ?? []).map((row: any) => ({
+    usuarios: ((users.data ?? []) as any[]).map(userFromRow),
+    entidades: ((entities.data ?? []) as any[]).map((row: any) => ({
       id: row.id,
       nombre: row.nombre,
       nit: row.nit ?? '',
@@ -151,12 +151,12 @@ export async function loadDB() {
       fechaContrato: row.fecha_contrato ?? undefined,
       contrato: row.contrato_path ? { nombre: 'Contrato', tipo: 'application/octet-stream', tamano: 0, dataUrl: row.contrato_path, fecha: row.fecha_contrato ?? '' } : undefined,
     })),
-    areas: (areas.data ?? []).map((row: any) => ({ id: row.id, nombre: row.nombre, entidadId: row.entidad_id, tipo: row.tipo, liderId: row.lider_id ?? undefined })),
+    areas: ((areas.data ?? []) as any[]).map((row: any) => ({ id: row.id, nombre: row.nombre, entidadId: row.entidad_id, tipo: row.tipo, liderId: row.lider_id ?? undefined })),
     documentos: docs,
-    permisos: Object.fromEntries((permissions.data ?? []).map((row: any) => [row.rol, row.modulos ?? []])),
-    asignacionesBase: (baseAssignments.data ?? []).map(assignmentFromRow),
-    asignacionesMensuales: (monthlyAssignments.data ?? []).map(assignmentFromRow),
-    tramites: (procedures.data ?? []).map((row: any) => ({
+    permisos: Object.fromEntries(((permissions.data ?? []) as any[]).map((row: any) => [row.rol, row.modulos ?? []])),
+    asignacionesBase: ((baseAssignments.data ?? []) as any[]).map(assignmentFromRow),
+    asignacionesMensuales: ((monthlyAssignments.data ?? []) as any[]).map(assignmentFromRow),
+    tramites: ((procedures.data ?? []) as any[]).map((row: any) => ({
       id: row.id,
       agremiadoId: row.agremiado_id,
       tipo: row.tipo,
@@ -167,7 +167,7 @@ export async function loadDB() {
       observacion: row.observacion ?? '',
       archivo: row.archivo_path ? { nombre: 'Trámite', tipo: 'application/octet-stream', tamano: 0, dataUrl: row.archivo_path, fecha: row.generado ?? '' } : undefined,
     })),
-    auditoria: (audit.data ?? []).map((row: any) => `${new Date(row.created_at).toLocaleString()} · ${row.evento}`),
+    auditoria: ((audit.data ?? []) as any[]).map((row: any) => `${new Date(row.created_at).toLocaleString()} · ${row.evento}`),
   };
 }
 
@@ -194,7 +194,7 @@ function assignmentFromRow(row: any) {
 }
 
 async function replaceTable(table: string, rows: any[], key = 'id') {
-  const supabase = requireSupabaseAdmin();
+  const supabase = requireSupabaseAdmin() as any;
   const ids = rows.map((row) => row[key]).filter(Boolean);
   const deleteQuery = supabase.from(table).delete();
   const deleteResult = ids.length

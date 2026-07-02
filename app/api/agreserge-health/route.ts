@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
-import { requireSupabaseAdmin } from '../../../lib/supabase-admin';
+import { getSupabaseEnvStatus, requireSupabaseAdmin } from '../../../lib/supabase-admin';
+
+export const dynamic = 'force-dynamic';
 
 const tables = [
   'agreserge_users',
@@ -14,6 +16,16 @@ const tables = [
 
 export async function GET() {
   try {
+    const env = getSupabaseEnvStatus();
+    if (!env.ok) {
+      return NextResponse.json({
+        ok: false,
+        status: 'missing-env',
+        missing: env.missing,
+        message: `Falta configurar en Vercel: ${env.missing.join(', ')}`,
+      }, { status: 500 });
+    }
+
     const supabase = requireSupabaseAdmin();
     const checks = await Promise.all(
       tables.map(async (table) => {
@@ -24,9 +36,10 @@ export async function GET() {
 
     return NextResponse.json({
       ok: checks.every((item) => item.ok),
+      status: checks.every((item) => item.ok) ? 'ready' : 'missing-tables',
       checks,
     });
   } catch (error: any) {
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: false, status: 'error', error: error.message }, { status: 500 });
   }
 }
