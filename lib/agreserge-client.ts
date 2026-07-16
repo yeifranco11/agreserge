@@ -26,6 +26,16 @@ export async function saveRemoteDB(db: unknown) {
   return payload;
 }
 
+export async function uploadDocument(documentId: string, file: File) {
+  const form = new FormData();
+  form.append('documentId', documentId);
+  form.append('file', file);
+  const response = await fetch('/api/agreserge-documents', { method: 'POST', body: form });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload?.error || 'No se pudo cargar el documento');
+  return payload;
+}
+
 export async function openRemoteDrivePeriod(input: {
   mes: string;
   anio: string;

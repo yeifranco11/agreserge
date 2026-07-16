@@ -158,7 +158,7 @@ function documentFromRow(row: any) {
       nombre: row.archivo_nombre ?? row.nombre,
       tipo: row.archivo_tipo ?? 'application/octet-stream',
       tamano: Number(row.archivo_tamano ?? 0),
-      dataUrl: row.archivo_path,
+      dataUrl: `/api/agreserge-documents/${encodeURIComponent(row.id)}`,
       fecha: row.fecha_carga ?? '',
     } : undefined,
   };
