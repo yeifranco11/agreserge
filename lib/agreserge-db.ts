@@ -6,15 +6,22 @@ const docsAdministrativo = ['Cédula de ciudadanía al 150%','Foto fondo blanco 
 const docsAsistencial = ['Cédula de ciudadanía al 150%','Foto fondo blanco para carnet','Hoja de vida función pública','Diplomas y actas de grado','Tarjeta profesional','RETHUS actualizado','Póliza de responsabilidad civil','Cursos obligatorios asistenciales','Carnet de vacunas','RUT actualizado','Antecedentes judiciales','Antecedentes fiscales','Antecedentes disciplinarios','Medidas correctivas','REDAM','Certificación bancaria','Certificación EPS','Fondo de pensiones','ARL','Caja de compensación','Examen médico laboral','Contrato o vinculación asistencial'];
 
 export const defaultPermissions: Record<string, string[]> = {
-  'Agremiado':['Ficha técnica','Cargue documental','Trámites administrativos','AGREBOT'],
-  'Líder Institucional':['Inicio','Mis agremiados','Informes de actividades','AGREBOT'],
+  'Agremiado':['Ficha técnica','Cargue documental','Nómina y comprobantes','Solicitudes y firmas','Trámites administrativos','AGREBOT'],
+  'Líder Institucional':['Inicio','Mis agremiados','Informes de actividades','Solicitudes y firmas','AGREBOT'],
   'Coordinador de Proceso AGRESERGE':['Inicio','Informes de actividades','Asignación mensual','AGREBOT','Auditoría'],
   'Coordinador General':['Inicio','Dashboard gerente','Revisión documental','Informes de actividades','Asignación mensual','Usuarios y claves','AGREBOT','Auditoría'],
-  'Coordinadora Administrativa y Financiera':['Inicio','Dashboard gerente','Informes de actividades','Asignación mensual','Trámites administrativos','Auditoría','AGREBOT'],
+  'Coordinadora Administrativa y Financiera':['Inicio','Dashboard gerente','Informes de actividades','Asignación mensual','Nómina y comprobantes','Solicitudes y firmas','Trámites administrativos','Auditoría','AGREBOT'],
   'Talento Humano':['Inicio','Parámetros institucionales','Usuarios y claves','Ficha técnica','AGREBOT'],
   'Experiencia al Agremiado':['Inicio','Usuarios y claves','Ficha técnica','AGREBOT'],
-  'Administrador de Sistemas':['Inicio','Parámetros institucionales','Permisos por perfil','Usuarios y claves','Auditoría'],
+  'Administrador de Sistemas':['Inicio','Parámetros institucionales','Nómina y comprobantes','Solicitudes y firmas','Permisos por perfil','Usuarios y claves','AGREBOT','Auditoría'],
   'Gerente':['Inicio','Dashboard gerente','Informes de actividades','Auditoría','AGREBOT'],
+};
+
+const requiredOperationalModules: Record<string, string[]> = {
+  'Agremiado': ['Nómina y comprobantes', 'Solicitudes y firmas'],
+  'Líder Institucional': ['Solicitudes y firmas'],
+  'Coordinadora Administrativa y Financiera': ['Nómina y comprobantes', 'Solicitudes y firmas'],
+  'Administrador de Sistemas': ['Nómina y comprobantes', 'Solicitudes y firmas', 'AGREBOT'],
 };
 
 function supportDocs(tipo = 'Asistencial', agremiadoId = '') {
@@ -153,7 +160,7 @@ export async function loadDB() {
     })),
     areas: ((areas.data ?? []) as any[]).map((row: any) => ({ id: row.id, nombre: row.nombre, entidadId: row.entidad_id, tipo: row.tipo, liderId: row.lider_id ?? undefined })),
     documentos: docs,
-    permisos: Object.fromEntries(((permissions.data ?? []) as any[]).map((row: any) => [row.rol, row.modulos ?? []])),
+    permisos: Object.fromEntries(((permissions.data ?? []) as any[]).map((row: any) => [row.rol, Array.from(new Set([...(row.modulos ?? []), ...(requiredOperationalModules[row.rol] ?? [])]))])),
     asignacionesBase: ((baseAssignments.data ?? []) as any[]).map(assignmentFromRow),
     asignacionesMensuales: ((monthlyAssignments.data ?? []) as any[]).map(assignmentFromRow),
     tramites: ((procedures.data ?? []) as any[]).map((row: any) => ({

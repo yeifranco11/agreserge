@@ -42,3 +42,20 @@ export async function openRemoteDrivePeriod(input: {
   if (!response.ok) throw new Error(payload?.error ?? 'No se pudo crear el periodo en Google Drive');
   return payload;
 }
+
+async function postJson(url: string, body: unknown) {
+  const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload?.error || 'La operación no pudo completarse');
+  return payload;
+}
+
+export const lookupPayroll = (documento: string) => postJson('/api/agreserge-payroll/lookup', { documento });
+export const askAgrebot = (message: string) => postJson('/api/agrebot', { message });
+export const createDigitalRequest = (tipo: string, datos: unknown) => postJson('/api/agreserge-requests', { tipo, datos });
+export async function decideDigitalRequest(id: string, action: string, comentario = '') {
+  const response = await fetch('/api/agreserge-requests', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, action, comentario }) });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload?.error || 'No se pudo actualizar la solicitud');
+  return payload;
+}

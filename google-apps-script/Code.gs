@@ -1,4 +1,5 @@
 const MASTER_FOLDER_ID = '1L6WrnOjq1ui19SQrzWvSqe5rLHKC-b60';
+const PAYROLL_SPREADSHEET_ID = '11R2hU9IzD55MBa8FivztC38boeQAxGpoMly_3yH0Ajk';
 
 function doGet() {
   return json_({ ok: true, service: 'AGRESERGE Drive Bridge' });
@@ -11,10 +12,54 @@ function doPost(e) {
     if (!expected || input.secret !== expected) throw new Error('Acceso no autorizado');
     if (input.action === 'openPeriod') return json_(openPeriod_(input));
     if (input.action === 'consolidate') return json_(consolidate_(input));
+    if (input.action === 'lookupPayroll') return json_(lookupPayroll_(input));
     throw new Error('Acción no soportada');
   } catch (error) {
     return json_({ ok: false, error: String(error.message || error) });
   }
+}
+
+function lookupPayroll_(input) {
+  const document = String(input.documento || '').replace(/\D/g, '');
+  if (!document) throw new Error('Documento requerido');
+  const spreadsheet = SpreadsheetApp.openById(PAYROLL_SPREADSHEET_ID);
+  const tabNames = ['ADMINISTRATIVO', 'SERV GEN Y MANTENIMIENTO', 'ASISTENCIAL'];
+  for (let s = 0; s < tabNames.length; s++) {
+    const sheet = spreadsheet.getSheetByName(tabNames[s]);
+    if (!sheet) continue;
+    const rows = sheet.getDataRange().getDisplayValues();
+    const headerIndex = rows.findIndex(function (row) { return row.some(function (cell) { return String(cell).trim().toUpperCase() === 'CEDULA'; }); });
+    if (headerIndex < 0) continue;
+    const headers = rows[headerIndex].map(function (value) { return String(value).trim(); });
+    const documentIndex = headers.findIndex(function (value) { return value.toUpperCase() === 'CEDULA'; });
+    const match = rows.slice(headerIndex + 1).find(function (row) { return String(row[documentIndex] || '').replace(/\D/g, '') === document; });
+    if (!match) continue;
+    const record = {};
+    headers.forEach(function (header, index) { record[header || ('CAMPO_' + (index + 1))] = match[index] || ''; });
+    const get = function () { for (let i = 0; i < arguments.length; i++) if (record[arguments[i]] !== undefined) return record[arguments[i]]; return ''; };
+    const money = function (value) { return Number(String(value || '').replace(/[^0-9-]/g, '') || 0); };
+    return { ok: true, tab: tabNames[s], payroll: {
+      documento: document,
+      nombre: get('NOMBRE AFILIADO PARTICIPE'),
+      cargo: get('CARGO', 'PROCESO', 'SERVICIO'),
+      area: get('AREA', 'CENTRO DE COSTOS'),
+      centroCostos: get('CENTRO DE COSTOS'),
+      dias: get('DIAS COMPENSADOS'),
+      ordinaria: money(get('COMPENSACION ORDINARIA')),
+      otras: money(get('OTRAS COMPENSACIONES ')),
+      transporte: money(get('COMPENSACION POR TRANSPORTE')),
+      salud: money(get('SALUD')),
+      pension: money(get('PENSION')),
+      arl: money(get('ARL')),
+      retencion: money(get('RETEFUENTE')),
+      otrosDescuentos: money(get('OTROS DESCUENTOS', 'VALOR DESCUENTO')),
+      adicionales: money(get('TRIAGE/VALOR ADICIONAL', 'VALOR ADICIONAL')),
+      totalRecibido: money(get('VALOR RECIBIDO MES')),
+      totalProceso: money(get('Valor total Mes Proceso 2026')),
+      observaciones: get('OBSERVACIONES', 'Observaciones')
+    }};
+  }
+  throw new Error('No se encontró nómina para ese documento');
 }
 
 function openPeriod_(input) {
