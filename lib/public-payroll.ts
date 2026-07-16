@@ -1,5 +1,10 @@
 const SPREADSHEET_ID = '11R2hU9IzD55MBa8FivztC38boeQAxGpoMly_3yH0Ajk';
 const TABS = ['ADMINISTRATIVO', 'SERV GEN Y MANTENIMIENTO', 'ASISTENCIAL'];
+const TAB_HEADERS: Record<string, string[]> = {
+  ADMINISTRATIVO: ['No','CEDULA','NOMBRE AFILIADO PARTICIPE','PROCESO','CENTRO DE COSTOS','DIAS COMPENSADOS','COMPENSACION ORDINARIA','OTRAS COMPENSACIONES','COMPENSACION POR TRANSPORTE','SALUD','PENSION','ARL','PARAFISCALES','BIENESTAR SOCIAL','VALOR DESCUENTO','VALOR ADICIONAL','VALOR RECIBIDO MES','PRIMA','CESANTIAS','INT CESANTIAS','VACACIONES','Costo proceso 2026','AIU 13,06%','IVA 19% SOBRE AIU','Valor total Mes Proceso 2026','Observaciones'],
+  'SERV GEN Y MANTENIMIENTO': ['No','CEDULA','NOMBRE AFILIADO PARTICIPE','SERVICIO','AREA','CENTRO DE COSTOS','DIAS COMPENSADOS','COMPENSACION ORDINARIA','OTRAS COMPENSACIONES','COMPENSACION POR TRANSPORTE','SALUD','PENSION','ARL','PARAFISCALES','BIENESTAR SOCIAL','VALOR DESCUENTO','VALOR ADICIONAL','VALOR RECIBIDO MES','PRIMA','CESANTIAS','INT CESANTIAS','VACACIONES','Costo proceso 2026','AIU 13,06%','IVA 19% SOBRE AIU','Valor total Mes Proceso 2026','Observaciones'],
+  ASISTENCIAL: ['No','CEDULA','NOMBRE AFILIADO PARTICIPE','CARGO','AREA','CENTRO DE COSTOS','SUBCENTRO DE COSTOS','DIAS COMPENSADOS','COMPENSACION ORDINARIA','OTRAS COMPENSACIONES','COMPENSACION POR TRANSPORTE','SALUD','PENSION','ARL','PARAFISCALES','BIENESTAR SOCIAL','RETEFUENTE','OTROS DESCUENTOS','TRIAGE/VALOR ADICIONAL','VALOR RECIBIDO MES','PRIMA','CESANTIAS','INT CESANTIAS','VACACIONES','Costo proceso 2026','AIU 13,06%','IVA 19% SOBRE AIU','Valor total Mes Proceso 2026','OBSERVACIONES'],
+};
 
 function parseCsv(text: string) {
   const rows: string[][] = [];
@@ -46,7 +51,7 @@ export async function lookupPayrollInPublicSheet(documento: string) {
     const response = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(12000) });
     if (!response.ok) continue;
     const rows = parseCsv(await response.text());
-    const headerIndex=rows.findIndex(row=>row.some(cell=>normalize(cell)==='CEDULA'));if(headerIndex<0)continue;const headers=rows[headerIndex];const documentIndex=headers.findIndex(cell=>normalize(cell)==='CEDULA');
+    const headerIndex=rows.findIndex(row=>row.some(cell=>normalize(cell)==='NOMBRE AFILIADO PARTICIPE'));if(headerIndex<0)continue;const headers=TAB_HEADERS[tab];const documentIndex=1;
     const match = rows.slice(headerIndex+1).find(row => String(row[documentIndex] || '').replace(/\D/g, '') === documento);
     if (!match) continue;
     return { tab, payroll: payrollFromRow(match, headers, tab) };
@@ -60,7 +65,7 @@ export async function loadPublicPayroll() {
     const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tab)}`;
     const response = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(15000) });
     if (!response.ok) throw new Error(`No fue posible leer la pestaña ${tab}`);
-    const rows=parseCsv(await response.text());const headerIndex=rows.findIndex(row=>row.some(cell=>normalize(cell)==='CEDULA'));if(headerIndex<0)continue;const headers=rows[headerIndex];const documentIndex=headers.findIndex(cell=>normalize(cell)==='CEDULA');
+    const rows=parseCsv(await response.text());const headerIndex=rows.findIndex(row=>row.some(cell=>normalize(cell)==='NOMBRE AFILIADO PARTICIPE'));if(headerIndex<0)continue;const headers=TAB_HEADERS[tab];const documentIndex=1;
     for (const row of rows.slice(headerIndex+1)) if (/^\d{5,12}$/.test(String(row[documentIndex] || '').replace(/\D/g, ''))) result.push(payrollFromRow(row,headers,tab));
   }
   return result;
