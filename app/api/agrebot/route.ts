@@ -56,7 +56,7 @@ export async function POST(request: Request) {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: process.env.OPENAI_MODEL || 'gpt-5.6-luna',
+        model: process.env.OPENAI_MODEL || 'gpt-4.1-mini',
         safety_identifier: user.id,
         text: { verbosity: 'medium' },
         instructions: 'Eres AGREBOT, asistente institucional de AGRESERGE. Responde en español claro y útil. Usa únicamente el contexto autorizado. Puedes calcular, resumir y explicar informes y fichas incluidas. Si una persona no aparece en fichasCoincidentes, pide nombre completo o documento. Nunca inventes datos, claves, pagos ni decisiones. No reveles cuentas bancarias, direcciones, datos médicos ni información personal no incluida. Un afiliado partícipe solo puede consultar su propia información. Toda aprobación administrativa requiere intervención humana.',
@@ -66,7 +66,9 @@ export async function POST(request: Request) {
     });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload?.error?.message || 'OpenAI no respondió');
-    return NextResponse.json({ ok: true, answer: payload.output_text || 'No fue posible generar una respuesta.' });
+    const answer = payload.output_text || payload.output?.flatMap((item: any) => item.content || []).map((item: any) => item.text || item.output_text || '').filter(Boolean).join('\n').trim();
+    if (!answer) throw new Error('La IA respondió sin texto. Intenta formular nuevamente la consulta.');
+    return NextResponse.json({ ok: true, answer });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'AGREBOT no pudo responder' }, { status: 500 });
   }
