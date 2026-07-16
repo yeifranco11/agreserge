@@ -16,7 +16,10 @@ export async function POST(request: Request) {
     if (!documento) return NextResponse.json({ error: 'Digite el número de documento' }, { status: 400 });
     let result: any;
     let sourceMode = 'apps-script';
-    try { result = await lookupPayrollInDrive(documento); }
+    try {
+      result = await lookupPayrollInDrive(documento);
+      if (!result?.payroll?.nombre) throw new Error('Google Drive devolvió un comprobante incompleto');
+    }
     catch { result = await lookupPayrollInPublicSheet(documento); sourceMode = 'google-sheet-public'; }
     if (actor.rol === 'Agremiado') {
       const normalize = (value: string) => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
