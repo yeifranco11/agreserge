@@ -1,8 +1,8 @@
-export async function remoteLogin(correo: string, clave: string) {
+export async function remoteLogin(usuario: string, clave: string) {
   const response = await fetch('/api/agreserge-auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ correo, clave }),
+    body: JSON.stringify({ usuario, clave }),
   });
 
   const payload = await response.json().catch(() => ({}));
@@ -51,6 +51,12 @@ async function postJson(url: string, body: unknown) {
 }
 
 export const lookupPayroll = (documento: string) => postJson('/api/agreserge-payroll/lookup', { documento });
+export async function loadPayrollReport() {
+  const response = await fetch('/api/agreserge-payroll/report', { cache: 'no-store' });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload?.error || 'No se pudo generar el informe de nómina');
+  return payload;
+}
 export const askAgrebot = (message: string) => postJson('/api/agrebot', { message });
 export const createDigitalRequest = (tipo: string, datos: unknown) => postJson('/api/agreserge-requests', { tipo, datos });
 export async function decideDigitalRequest(id: string, action: string, comentario = '') {

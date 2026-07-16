@@ -7,14 +7,15 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {
-    const { correo, clave } = await request.json();
+    const { usuario, correo, clave } = await request.json();
+    const login = String(usuario || correo || '').trim().toLowerCase();
     await ensureSeeded();
 
     const supabase = requireSupabaseAdmin();
     const { data: user, error } = await supabase
       .from('agreserge_users')
       .select('*')
-      .eq('correo', correo)
+      .ilike('correo', login)
       .eq('activo', true)
       .maybeSingle();
 

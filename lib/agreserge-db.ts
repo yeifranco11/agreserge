@@ -21,7 +21,7 @@ export const defaultPermissions: Record<string, string[]> = {
   'Coordinadora Administrativa y Financiera':['Inicio','Dashboard gerente','Informes de actividades','Asignación mensual','Nómina y comprobantes','Solicitudes y firmas','Trámites administrativos','Auditoría','AGREBOT'],
   'Talento Humano':['Inicio','Parámetros institucionales','Usuarios y claves','Ficha técnica','AGREBOT'],
   'Experiencia al Agremiado':['Inicio','Usuarios y claves','Ficha técnica','AGREBOT'],
-  'Administrador de Sistemas':['Inicio','Parámetros institucionales','Nómina y comprobantes','Solicitudes y firmas','Permisos por perfil','Usuarios y claves','AGREBOT','Auditoría'],
+  'Administrador de Sistemas':['Inicio','Dashboard gerente','Parámetros institucionales','Ficha técnica','Cargue documental','Revisión documental','Mis agremiados','Informes de actividades','Asignación mensual','Nómina y comprobantes','Solicitudes y firmas','Trámites administrativos','Permisos por perfil','Usuarios y claves','AGREBOT','Auditoría'],
   'Gerente':['Inicio','Dashboard gerente','Informes de actividades','Auditoría','AGREBOT'],
 };
 
