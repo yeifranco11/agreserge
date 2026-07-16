@@ -18,15 +18,25 @@ function parseCsv(text: string) {
   return rows;
 }
 
-const number = (value: string) => Number(String(value || '').replace(/[^0-9-]/g, '') || 0);
+const normalize = (value:string) => String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toUpperCase();
+const number = (value: string) => {
+  let clean=String(value||'').replace(/[^0-9,.-]/g,''); if(!clean)return 0;
+  if(clean.includes(',')) clean=clean.replace(/\./g,'').replace(',','.');
+  else if(/^[-]?\d{1,3}(\.\d{3})+$/.test(clean)) clean=clean.replace(/\./g,'');
+  return Math.round(Number(clean)||0);
+};
 
-function payrollFromRow(match: string[], tab: string) {
+function payrollFromRow(match: string[], headers: string[], tab: string) {
+  const record=Object.fromEntries(headers.map((header,index)=>[normalize(header),match[index]||'']));
+  const get=(...names:string[])=>{for(const name of names){const value=record[normalize(name)];if(value!==undefined)return value}return ''};
   return {
-    documento: String(match[1] || '').replace(/\D/g, ''), nombre: match[2] || '', cargo: match[3] || '', area: match[4] || tab,
-    centroCostos: match[5] || '', dias: match[7] || '', ordinaria: number(match[8]), otras: 0,
-    transporte: number(match[18]), salud: number(match[11]), pension: number(match[12]), arl: number(match[13]),
-    retencion: number(match[16]), otrosDescuentos: 0, adicionales: 0, totalRecibido: number(match[19]),
-    totalProceso: number(match[27] || match[24]), observaciones: match[28] || '', tab,
+    documento:String(get('CEDULA')).replace(/\D/g,''),nombre:get('NOMBRE AFILIADO PARTICIPE'),cargo:get('CARGO','PROCESO','SERVICIO'),area:get('AREA','CENTRO DE COSTOS')||tab,
+    centroCostos:get('CENTRO DE COSTOS'),subcentroCostos:get('SUBCENTRO DE COSTOS'),dias:get('DIAS COMPENSADOS'),
+    ordinaria:number(get('COMPENSACION ORDINARIA')),otras:number(get('OTRAS COMPENSACIONES')),transporte:number(get('COMPENSACION POR TRANSPORTE')),
+    salud:number(get('SALUD','EPS')),pension:number(get('PENSION','PENSIONES')),arl:number(get('ARL')),retencion:number(get('RETEFUENTE')),
+    otrosDescuentos:number(get('OTROS DESCUENTOS','VALOR DESCUENTO')),adicionales:number(get('TRIAGE/VALOR ADICIONAL','VALOR ADICIONAL')),
+    totalRecibido:number(get('VALOR RECIBIDO MES')),costoProceso:number(get('COSTO PROCESO 2026')),totalProceso:number(get('VALOR TOTAL MES PROCESO 2026')),
+    parafiscales:number(get('PARAFISCALES')),bienestar:number(get('BIENESTAR SOCIAL')),prima:number(get('PRIMA')),cesantias:number(get('CESANTIAS')),interesesCesantias:number(get('INT CESANTIAS')),vacaciones:number(get('VACACIONES')),aiu:number(get('AIU 13,06%')),iva:number(get('IVA 19% SOBRE AIU')),observaciones:get('OBSERVACIONES'),tab,
   };
 }
 
@@ -36,9 +46,10 @@ export async function lookupPayrollInPublicSheet(documento: string) {
     const response = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(12000) });
     if (!response.ok) continue;
     const rows = parseCsv(await response.text());
-    const match = rows.find(row => String(row[1] || '').replace(/\D/g, '') === documento);
+    const headerIndex=rows.findIndex(row=>row.some(cell=>normalize(cell)==='CEDULA'));if(headerIndex<0)continue;const headers=rows[headerIndex];const documentIndex=headers.findIndex(cell=>normalize(cell)==='CEDULA');
+    const match = rows.slice(headerIndex+1).find(row => String(row[documentIndex] || '').replace(/\D/g, '') === documento);
     if (!match) continue;
-    return { tab, payroll: payrollFromRow(match, tab) };
+    return { tab, payroll: payrollFromRow(match, headers, tab) };
   }
   throw new Error('No se encontró nómina para ese documento en las hojas ADMINISTRATIVO, SERV GEN Y MANTENIMIENTO o ASISTENCIAL.');
 }
@@ -49,7 +60,8 @@ export async function loadPublicPayroll() {
     const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tab)}`;
     const response = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(15000) });
     if (!response.ok) throw new Error(`No fue posible leer la pestaña ${tab}`);
-    for (const row of parseCsv(await response.text())) if (/^\d{5,12}$/.test(String(row[1] || '').replace(/\D/g, ''))) result.push(payrollFromRow(row, tab));
+    const rows=parseCsv(await response.text());const headerIndex=rows.findIndex(row=>row.some(cell=>normalize(cell)==='CEDULA'));if(headerIndex<0)continue;const headers=rows[headerIndex];const documentIndex=headers.findIndex(cell=>normalize(cell)==='CEDULA');
+    for (const row of rows.slice(headerIndex+1)) if (/^\d{5,12}$/.test(String(row[documentIndex] || '').replace(/\D/g, ''))) result.push(payrollFromRow(row,headers,tab));
   }
   return result;
 }

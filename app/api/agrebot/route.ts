@@ -9,12 +9,13 @@ export async function POST(request: Request) {
     const db = await loadDB();
     const user = db.usuarios.find((item: any) => item.id === userId && item.activo);
     if (!user) return NextResponse.json({ error: 'Usuario no autorizado' }, { status: 403 });
-    const { message } = await request.json();
+    const { message, history } = await request.json();
     if (!String(message || '').trim()) return NextResponse.json({ error: 'Escribe una consulta' }, { status: 400 });
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) return NextResponse.json({ error: 'AGREBOT IA está preparado, pero falta configurar OPENAI_API_KEY en Vercel.' }, { status: 503 });
 
     const question = String(message).slice(0, 4000);
+    const conversation=(Array.isArray(history)?history:[]).filter((item:any)=>['user','assistant'].includes(item?.role)&&String(item?.content||'').trim()).slice(-12).map((item:any)=>({role:item.role,content:String(item.content).slice(0,2500)}));
     const ownDocs = (db.documentos[user.id] || []).map((d: any) => ({ nombre: d.nombre, estado: d.estado, vencimiento: d.vencimiento }));
     const managerialRoles = ['Administrador de Sistemas','Coordinadora','Coordinación AGRESERGE','Coordinación General','Coordinación Administrativa','Coordinación Asistencial','Coordinador de Sede','Tesorería','Talento Humano','Gerente','Coordinador General','Coordinadora Administrativa y Financiera','Experiencia al Agremiado'];
     const isManager = managerialRoles.includes(user.rol);
@@ -59,8 +60,8 @@ export async function POST(request: Request) {
         model: process.env.OPENAI_MODEL || 'gpt-4.1-mini',
         safety_identifier: user.id,
         text: { verbosity: 'medium' },
-        instructions: 'Eres AGREBOT, asistente institucional de AGRESERGE. Responde en español claro y útil. Usa únicamente el contexto autorizado. Puedes calcular, resumir y explicar informes y fichas incluidas. Si una persona no aparece en fichasCoincidentes, pide nombre completo o documento. Nunca inventes datos, claves, pagos ni decisiones. No reveles cuentas bancarias, direcciones, datos médicos ni información personal no incluida. Un afiliado partícipe solo puede consultar su propia información. Toda aprobación administrativa requiere intervención humana.',
-        input: `CONTEXTO AUTORIZADO:\n${JSON.stringify(context)}\n\nCONSULTA:\n${question}`,
+        instructions: `Eres AGREBOT, asistente institucional conversacional de AGRESERGE. Responde en español claro y útil. Mantén continuidad con los mensajes anteriores: interpreta respuestas breves como "sí", "continúa" o "por hospital" usando la pregunta previa. Usa únicamente el contexto autorizado. Puedes calcular, resumir y explicar informes y fichas incluidas. Si una persona no aparece en fichasCoincidentes, pide nombre completo o documento. Nunca inventes datos, claves, pagos ni decisiones. No reveles cuentas bancarias, direcciones, datos médicos ni información personal no incluida. Un afiliado partícipe solo puede consultar su propia información. Toda aprobación administrativa requiere intervención humana.\n\nCONTEXTO AUTORIZADO ACTUAL:\n${JSON.stringify(context)}`,
+        input: [...conversation,{role:'user',content:question}],
         max_output_tokens: 900,
       }),
     });

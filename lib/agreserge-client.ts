@@ -57,7 +57,7 @@ export async function loadPayrollReport() {
   if (!response.ok) throw new Error(payload?.error || 'No se pudo generar el informe de nómina');
   return payload;
 }
-export const askAgrebot = (message: string) => postJson('/api/agrebot', { message });
+export const askAgrebot = (message: string, history: Array<{role:'user'|'assistant';content:string}> = []) => postJson('/api/agrebot', { message, history });
 export const createDigitalRequest = (tipo: string, datos: unknown) => postJson('/api/agreserge-requests', { tipo, datos });
 export async function decideDigitalRequest(id: string, action: string, comentario = '') {
   const response = await fetch('/api/agreserge-requests', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, action, comentario }) });
