@@ -20,8 +20,11 @@ export const defaultPermissions: Record<string, string[]> = {
 const requiredOperationalModules: Record<string, string[]> = {
   'Agremiado': ['Nómina y comprobantes', 'Solicitudes y firmas'],
   'Líder Institucional': ['Solicitudes y firmas'],
-  'Coordinadora Administrativa y Financiera': ['Nómina y comprobantes', 'Solicitudes y firmas'],
-  'Administrador de Sistemas': ['Nómina y comprobantes', 'Solicitudes y firmas', 'AGREBOT'],
+  'Coordinadora Administrativa y Financiera': ['Ficha técnica', 'Nómina y comprobantes', 'Solicitudes y firmas'],
+  'Coordinador General': ['Ficha técnica'],
+  'Talento Humano': ['Ficha técnica'],
+  'Experiencia al Agremiado': ['Ficha técnica'],
+  'Administrador de Sistemas': ['Ficha técnica', 'Nómina y comprobantes', 'Solicitudes y firmas', 'AGREBOT'],
 };
 
 function supportDocs(tipo = 'Asistencial', agremiadoId = '') {
@@ -84,6 +87,47 @@ function userFromRow(row: any) {
   };
 }
 
+function profileFromRow(row: any) {
+  return {
+    userId: row.user_id,
+    documento: row.documento,
+    lugarExpedicion: row.lugar_expedicion ?? '',
+    cnv: row.cnv ?? '',
+    fechaIngreso: row.fecha_ingreso ?? '',
+    fechaRetiro: row.fecha_retiro ?? '',
+    estadoLaboral: row.estado_laboral ?? '',
+    formacion: row.formacion ?? '',
+    proceso: row.proceso ?? '',
+    direccion: row.direccion ?? '',
+    barrio: row.barrio ?? '',
+    municipio: row.municipio ?? '',
+    departamento: row.departamento ?? '',
+    sexo: row.sexo ?? '',
+    estadoCivil: row.estado_civil ?? '',
+    personasCargo: row.personas_cargo ?? '',
+    fechaNacimiento: row.fecha_nacimiento ?? '',
+    lugarNacimiento: row.lugar_nacimiento ?? '',
+    tipoContrato: row.tipo_contrato ?? '',
+    formaPago: row.forma_pago ?? '',
+    banco: row.banco ?? '',
+    tipoCuenta: row.tipo_cuenta ?? '',
+    numeroCuenta: row.numero_cuenta ?? '',
+    eps: row.eps ?? '',
+    afp: row.afp ?? '',
+    arl: row.arl ?? '',
+    cajaCompensacion: row.caja_compensacion ?? '',
+    rh: row.rh ?? '',
+    talla: row.talla ?? '',
+    retencionFuente: row.retencion_fuente ?? '',
+    observaciones: row.observaciones ?? '',
+    fechaExamenMedico: row.fecha_examen_medico ?? '',
+    ciudadVotacion: row.ciudad_votacion ?? '',
+    puestoVotacion: row.puesto_votacion ?? '',
+    fuenteOrigen: row.fuente_origen ?? '',
+    datosAdicionales: row.datos_adicionales ?? {},
+  };
+}
+
 function documentFromRow(row: any) {
   return {
     id: row.id,
@@ -118,6 +162,7 @@ export async function loadDB() {
   const supabase = requireSupabaseAdmin();
   const [
     users,
+    profiles,
     entities,
     areas,
     documents,
@@ -128,6 +173,7 @@ export async function loadDB() {
     audit,
   ] = await Promise.all([
     supabase.from('agreserge_users').select('*').order('nombre'),
+    supabase.from('agreserge_profiles').select('*'),
     supabase.from('agreserge_entities').select('*').order('nombre'),
     supabase.from('agreserge_areas').select('*').order('nombre'),
     supabase.from('agreserge_documents').select('*').order('nombre'),
@@ -138,7 +184,7 @@ export async function loadDB() {
     supabase.from('agreserge_audit').select('*').order('created_at', { ascending: false }).limit(200),
   ]);
 
-  const error = [users.error, entities.error, areas.error, documents.error, permissions.error, baseAssignments.error, monthlyAssignments.error, procedures.error, audit.error].find(Boolean);
+  const error = [users.error, profiles.error, entities.error, areas.error, documents.error, permissions.error, baseAssignments.error, monthlyAssignments.error, procedures.error, audit.error].find(Boolean);
   if (error) throw error;
 
   const docs: Record<string, any[]> = {};
@@ -149,6 +195,7 @@ export async function loadDB() {
 
   return {
     usuarios: ((users.data ?? []) as any[]).map(userFromRow),
+    perfiles: Object.fromEntries(((profiles.data ?? []) as any[]).map((row: any) => [row.user_id, profileFromRow(row)])),
     entidades: ((entities.data ?? []) as any[]).map((row: any) => ({
       id: row.id,
       nombre: row.nombre,
@@ -233,6 +280,46 @@ export async function saveFullDB(db: any, options: { force?: boolean; actor?: an
     updated_at: new Date().toISOString(),
   }));
 
+  const profileRows = Object.values(db.perfiles ?? {}).map((item: any) => ({
+    user_id: item.userId,
+    documento: item.documento,
+    lugar_expedicion: item.lugarExpedicion || null,
+    cnv: item.cnv || null,
+    fecha_ingreso: item.fechaIngreso || null,
+    fecha_retiro: item.fechaRetiro || null,
+    estado_laboral: item.estadoLaboral || null,
+    formacion: item.formacion || null,
+    proceso: item.proceso || null,
+    direccion: item.direccion || null,
+    barrio: item.barrio || null,
+    municipio: item.municipio || null,
+    departamento: item.departamento || null,
+    sexo: item.sexo || null,
+    estado_civil: item.estadoCivil || null,
+    personas_cargo: item.personasCargo === '' ? null : Number(item.personasCargo),
+    fecha_nacimiento: item.fechaNacimiento || null,
+    lugar_nacimiento: item.lugarNacimiento || null,
+    tipo_contrato: item.tipoContrato || null,
+    forma_pago: item.formaPago || null,
+    banco: item.banco || null,
+    tipo_cuenta: item.tipoCuenta || null,
+    numero_cuenta: item.numeroCuenta || null,
+    eps: item.eps || null,
+    afp: item.afp || null,
+    arl: item.arl || null,
+    caja_compensacion: item.cajaCompensacion || null,
+    rh: item.rh || null,
+    talla: item.talla || null,
+    retencion_fuente: item.retencionFuente || null,
+    observaciones: item.observaciones || null,
+    fecha_examen_medico: item.fechaExamenMedico || null,
+    ciudad_votacion: item.ciudadVotacion || null,
+    puesto_votacion: item.puestoVotacion || null,
+    fuente_origen: item.fuenteOrigen || null,
+    datos_adicionales: item.datosAdicionales ?? {},
+    updated_at: new Date().toISOString(),
+  }));
+
   const entityRows = (db.entidades ?? []).map((item: any) => ({
     id: item.id,
     nombre: item.nombre,
@@ -306,6 +393,10 @@ export async function saveFullDB(db: any, options: { force?: boolean; actor?: an
   }));
 
   await replaceTable('agreserge_users', userRows);
+  if (profileRows.length) {
+    const { error } = await (requireSupabaseAdmin() as any).from('agreserge_profiles').upsert(profileRows, { onConflict: 'user_id' });
+    if (error) throw error;
+  }
   await replaceTable('agreserge_entities', entityRows);
   await replaceTable('agreserge_areas', areaRows);
   await replaceTable('agreserge_documents', documentRows);

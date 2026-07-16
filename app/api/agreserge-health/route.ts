@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic';
 
 const tables = [
   'agreserge_users',
+  'agreserge_profiles',
   'agreserge_entities',
   'agreserge_areas',
   'agreserge_documents',
@@ -29,7 +30,7 @@ export async function GET() {
     const supabase = requireSupabaseAdmin();
     const checks = await Promise.all(
       tables.map(async (table) => {
-        const healthColumn = table === 'agreserge_permissions' ? 'rol' : 'id';
+        const healthColumn = table === 'agreserge_permissions' ? 'rol' : table === 'agreserge_profiles' ? 'user_id' : 'id';
         const { error } = await supabase.from(table).select(healthColumn).limit(1);
         return { table, ok: !error, error: error?.message ?? null };
       }),
