@@ -25,3 +25,20 @@ export async function saveRemoteDB(db: unknown) {
   if (!response.ok) throw new Error(payload?.error ?? 'No se pudo guardar en Supabase');
   return payload;
 }
+
+export async function openRemoteDrivePeriod(input: {
+  mes: string;
+  anio: string;
+  fechaLimite?: string;
+  assignments: Array<{ anexo: number; responsableId: string }>;
+}) {
+  const response = await fetch('/api/agreserge-drive/open-period', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload?.error ?? 'No se pudo crear el periodo en Google Drive');
+  return payload;
+}
