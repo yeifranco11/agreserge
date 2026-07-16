@@ -1,5 +1,12 @@
 export const adminRoles = new Set([
   'Administrador de Sistemas',
+  'Coordinación AGRESERGE',
+  'Coordinación General',
+  'Coordinación Administrativa',
+  'Coordinación Asistencial',
+  'Coordinadora',
+  'Coordinador de Sede',
+  'Tesorería',
   'Gerente',
   'Coordinador General',
   'Coordinadora Administrativa y Financiera',
@@ -9,6 +16,11 @@ export const adminRoles = new Set([
 
 export const reviewRoles = new Set([
   'Administrador de Sistemas',
+  'Coordinación AGRESERGE',
+  'Coordinación General',
+  'Coordinación Asistencial',
+  'Coordinadora',
+  'Coordinador de Sede',
   'Coordinador General',
   'Coordinador de Proceso AGRESERGE',
   'Talento Humano',

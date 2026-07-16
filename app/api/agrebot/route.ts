@@ -16,11 +16,11 @@ export async function POST(request: Request) {
 
     const question = String(message).slice(0, 4000);
     const ownDocs = (db.documentos[user.id] || []).map((d: any) => ({ nombre: d.nombre, estado: d.estado, vencimiento: d.vencimiento }));
-    const managerialRoles = ['Administrador de Sistemas','Gerente','Coordinador General','Coordinadora Administrativa y Financiera','Talento Humano','Experiencia al Agremiado'];
+    const managerialRoles = ['Administrador de Sistemas','Coordinadora','Coordinación AGRESERGE','Coordinación General','Coordinación Administrativa','Coordinación Asistencial','Coordinador de Sede','Tesorería','Talento Humano','Gerente','Coordinador General','Coordinadora Administrativa y Financiera','Experiencia al Agremiado'];
     const isManager = managerialRoles.includes(user.rol);
     const allowedUsers = user.rol === 'Agremiado'
       ? db.usuarios.filter((u: any) => u.id === user.id)
-      : user.rol === 'Líder Institucional'
+      : ['Líder Institucional','Líder de Proceso'].includes(user.rol)
         ? db.usuarios.filter((u: any) => u.id === user.id || u.liderId === user.id)
         : db.usuarios;
     const tokens = question.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/[^a-z0-9]+/).filter((token: string) => token.length >= 4);

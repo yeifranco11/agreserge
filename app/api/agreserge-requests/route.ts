@@ -42,8 +42,8 @@ export async function PATCH(request: Request) {
     if (!item) return NextResponse.json({ error: 'Solicitud no encontrada' }, { status: 404 });
     let metadata: any = {};
     try { metadata = JSON.parse(item.observacion || '{}'); } catch { metadata = { detalle: item.observacion }; }
-    const isLeader = actor.rol === 'Líder Institucional' && metadata.liderId === actor.id;
-    const isCoordinator = ['Administrador de Sistemas','Coordinador General','Coordinador de Proceso AGRESERGE','Coordinadora Administrativa y Financiera','Gerente'].includes(actor.rol);
+    const isLeader = ['Líder Institucional','Líder de Proceso'].includes(actor.rol) && metadata.liderId === actor.id;
+    const isCoordinator = ['Administrador de Sistemas','Coordinadora','Coordinación AGRESERGE','Coordinación General','Coordinación Administrativa','Coordinación Asistencial','Coordinador de Sede','Coordinador General','Coordinador de Proceso AGRESERGE','Coordinadora Administrativa y Financiera','Gerente'].includes(actor.rol);
     if (!isLeader && !isCoordinator) return NextResponse.json({ error: 'No tiene permiso para decidir esta solicitud' }, { status: 403 });
     const states: Record<string, string> = { approve: isLeader ? 'Aprobado por líder' : 'Aprobado administrativo', reject: 'Rechazado', finalize: 'Finalizado' };
     const estado = states[action];

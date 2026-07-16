@@ -8,7 +8,7 @@ import { NominaComprobantes, SolicitudesFirmas } from './components/operations';
 import { TechnicalProfiles } from './components/technical-profiles';
 
 type TipoPersonal = 'Asistencial' | 'Administrativo';
-type Rol = 'Agremiado' | 'Líder Institucional' | 'Coordinador de Proceso AGRESERGE' | 'Coordinador General' | 'Coordinadora Administrativa y Financiera' | 'Talento Humano' | 'Experiencia al Agremiado' | 'Administrador de Sistemas' | 'Gerente';
+type Rol = 'Agremiado' | 'Líder de Proceso' | 'Líder Institucional' | 'Coordinadora' | 'Talento Humano' | 'Coordinación Administrativa' | 'Coordinación Asistencial' | 'Coordinador de Sede' | 'Tesorería' | 'Coordinación General' | 'Administrador de Sistemas' | 'Coordinación AGRESERGE' | 'Coordinador de Proceso AGRESERGE' | 'Coordinador General' | 'Coordinadora Administrativa y Financiera' | 'Experiencia al Agremiado' | 'Gerente';
 type EstadoDoc = 'Pendiente' | 'Cargado' | 'Aprobado' | 'Rechazado' | 'Devuelto';
 type Usuario = { id:string; nombre:string; correo:string; clave:string; rol:Rol; tipo?:TipoPersonal; entidadId?:string; areaId?:string; liderId?:string; activo:boolean; cargo?:string; telefono?:string };
 type Entidad = { id:string; nombre:string; nit:string; ciudad:string; direccion:string; contrato?:ArchivoLocal; fechaContrato?:string };
@@ -23,7 +23,7 @@ type DB = { usuarios:Usuario[]; perfiles?:Record<string,any>; entidades:Entidad[
 const uid=()=>Math.random().toString(36).slice(2,10);
 const hoy=()=>new Date().toISOString().slice(0,10);
 const roleLabel=(rol:string)=>rol==='Agremiado'?'Afiliado partícipe':rol==='Administrador de Sistemas'?'Administrador del sistema':rol;
-const roles:Rol[]=['Agremiado','Líder Institucional','Coordinador de Proceso AGRESERGE','Coordinador General','Coordinadora Administrativa y Financiera','Talento Humano','Experiencia al Agremiado','Administrador de Sistemas','Gerente'];
+const roles:Rol[]=['Agremiado','Líder de Proceso','Coordinadora','Talento Humano','Coordinación Administrativa','Coordinación Asistencial','Coordinador de Sede','Tesorería','Coordinación General','Administrador de Sistemas'];
 const modulos=['Inicio','Dashboard gerente','Parámetros institucionales','Ficha técnica','Cargue documental','Revisión documental','Mis agremiados','Informes de actividades','Asignación mensual','Nómina y comprobantes','Solicitudes y firmas','Trámites administrativos','Permisos por perfil','Usuarios y claves','AGREBOT','Auditoría'];
 const meses=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 const anexos=[

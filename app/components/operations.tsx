@@ -12,7 +12,7 @@ export function NominaComprobantes({ session }: any) {
   const [payroll, setPayroll] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const canManage = ['Administrador de Sistemas','Coordinadora Administrativa y Financiera','Coordinador General','Gerente'].includes(session.rol);
+  const canManage = ['Administrador de Sistemas','Coordinadora','Coordinación AGRESERGE','Coordinación General','Coordinación Administrativa','Coordinador de Sede','Tesorería','Coordinadora Administrativa y Financiera','Coordinador General','Gerente'].includes(session.rol);
 
   const buscar = async () => {
     setLoading(true); setError(''); setPayroll(null);
@@ -44,7 +44,7 @@ export function SolicitudesFirmas({ session, db, setDb }: any) {
   const [form,setForm]=useState<any>({fechaSolicitud:new Date().toISOString().slice(0,10),motivo:'Ausencia personal'});
   const [loading,setLoading]=useState(false);
   const parsed = (value:any)=>{try{return JSON.parse(value||'{}')}catch{return {detalle:value}}};
-  const inbox=useMemo(()=> (db.tramites||[]).filter((item:any)=>['Solicitud de permiso','Cambio de turno','Solicitud de viáticos'].includes(item.tipo)).filter((item:any)=>{const meta=parsed(item.observacion);if(session.rol==='Agremiado')return item.agremiadoId===session.id;if(session.rol==='Líder Institucional')return meta.liderId===session.id;return true}),[db.tramites,session]);
+  const inbox=useMemo(()=> (db.tramites||[]).filter((item:any)=>['Solicitud de permiso','Cambio de turno','Solicitud de viáticos'].includes(item.tipo)).filter((item:any)=>{const meta=parsed(item.observacion);if(session.rol==='Agremiado')return item.agremiadoId===session.id;if(['Líder Institucional','Líder de Proceso'].includes(session.rol))return meta.liderId===session.id;return true}),[db.tramites,session]);
   const sync=(payload:any)=>{if(payload.db){setDb(payload.db);localStorage.setItem('portal_agreserge_db_v31',JSON.stringify(payload.db))}};
   const enviar=async()=>{setLoading(true);try{const payload=await createDigitalRequest(tipo,{...form,area:session.areaId,cargo:session.cargo,entidad:session.entidadId});sync(payload);alert('Solicitud radicada y firmada digitalmente.')}catch(e:any){alert(e.message)}finally{setLoading(false)}};
   const decidir=async(id:string,action:string)=>{const comentario=prompt('Comentario de la decisión (opcional)','')||'';try{sync(await decideDigitalRequest(id,action,comentario))}catch(e:any){alert(e.message)}};

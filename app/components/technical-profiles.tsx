@@ -3,7 +3,7 @@
 import { Save, Search, UserRound } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
-const privileged = ['Administrador de Sistemas','Gerente','Coordinador General','Coordinadora Administrativa y Financiera','Talento Humano','Experiencia al Agremiado'];
+const privileged = ['Administrador de Sistemas','Coordinadora','Coordinación AGRESERGE','Coordinación General','Coordinación Administrativa','Coordinación Asistencial','Coordinador de Sede','Talento Humano','Gerente','Coordinador General','Coordinadora Administrativa y Financiera','Experiencia al Agremiado'];
 const fields = [
   ['documento','Documento'],['lugarExpedicion','Lugar de expedición'],['fechaIngreso','Fecha de ingreso'],['fechaRetiro','Fecha de retiro'],
   ['estadoLaboral','Estado laboral'],['formacion','Formación'],['proceso','Proceso / cargo'],['rh','RH'],['direccion','Dirección'],['barrio','Barrio'],
