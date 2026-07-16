@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { hashPassword, setSessionCookie } from '../../../../lib/agreserge-auth';
+import { setSessionCookie, verifyPassword } from '../../../../lib/agreserge-auth';
 import { ensureSeeded, loadDB } from '../../../../lib/agreserge-db';
 import { requireSupabaseAdmin } from '../../../../lib/supabase-admin';
 
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
 
     if (error) throw error;
     const foundUser = user as any;
-    if (!foundUser || foundUser.clave_hash !== hashPassword(clave)) {
+    if (!foundUser || !verifyPassword(String(clave || ''), foundUser.clave_hash)) {
       return NextResponse.json({ error: 'Usuario, clave o perfil inactivo' }, { status: 401 });
     }
 
