@@ -303,6 +303,7 @@ export async function saveFullDB(db: any, options: { force?: boolean; actor?: an
     telefono: user.telefono ?? null,
     updated_at: new Date().toISOString(),
   }));
+  const validUserIds = new Set(userRows.map((user: any) => user.id));
 
   const profileRows = Object.values(db.perfiles ?? {}).map((item: any) => ({
     user_id: item.userId,
@@ -381,13 +382,17 @@ export async function saveFullDB(db: any, options: { force?: boolean; actor?: an
   }));
 
   const permissionRows = Object.entries(db.permisos ?? {}).map(([rol, modulos]) => ({ rol, modulos, updated_at: new Date().toISOString() }));
-  const assignmentRows = [...(db.asignacionesBase ?? []).map((item: any) => ({ ...item, esBase: true })), ...(db.asignacionesMensuales ?? []).map((item: any) => ({ ...item, esBase: false }))].map((item: any) => ({
+  const assignmentRows = [...(db.asignacionesBase ?? []).map((item: any) => ({ ...item, esBase: true })), ...(db.asignacionesMensuales ?? []).map((item: any) => ({ ...item, esBase: false }))]
+    .filter((item: any) => validUserIds.has(item.responsableId))
+    .map((item: any) => ({
     id: item.id,
     anexo: item.anexo,
     titulo: item.titulo,
     tipo: item.tipo,
     responsable_id: item.responsableId,
-    coordinador_id: item.coordinadorId ?? null,
+    // Las cuentas institucionales pueden ser reprovisionadas con otro id. Una
+    // referencia histórica inválida no debe impedir guardar toda la asignación.
+    coordinador_id: validUserIds.has(item.coordinadorId) ? item.coordinadorId : null,
     mes: item.mes,
     anio: item.anio,
     plantilla_google: item.plantillaGoogle ?? null,
