@@ -283,11 +283,16 @@ async function replaceTable(table: string, rows: any[], key = 'id') {
 export async function saveFullDB(db: any, options: { force?: boolean; actor?: any } = {}) {
   if (!options.force && !canAdmin(options.actor)) throw new Error('Este perfil no tiene permiso para sincronizar toda la base.');
 
+  const supabase = requireSupabaseAdmin() as any;
+  const { data: storedUsers, error: storedUsersError } = await supabase.from('agreserge_users').select('id,clave_hash');
+  if (storedUsersError) throw storedUsersError;
+  const storedHashes = new Map((storedUsers ?? []).map((user: any) => [user.id, user.clave_hash]));
+
   const userRows = (db.usuarios ?? []).map((user: any) => ({
     id: user.id,
     nombre: user.nombre,
     correo: user.correo,
-    clave_hash: user.clave ? hashPassword(user.clave) : undefined,
+    clave_hash: user.clave ? hashPassword(user.clave) : storedHashes.get(user.id) ?? null,
     rol: user.rol,
     tipo: user.tipo ?? null,
     entidad_id: user.entidadId ?? null,
@@ -411,7 +416,10 @@ export async function saveFullDB(db: any, options: { force?: boolean; actor?: an
     updated_at: new Date().toISOString(),
   }));
 
-  await replaceTable('agreserge_users', userRows);
+  if (userRows.length) {
+    const { error } = await supabase.from('agreserge_users').upsert(userRows, { onConflict: 'id' });
+    if (error) throw error;
+  }
   if (profileRows.length) {
     const { error } = await (requireSupabaseAdmin() as any).from('agreserge_profiles').upsert(profileRows, { onConflict: 'user_id' });
     if (error) throw error;
