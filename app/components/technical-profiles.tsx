@@ -149,6 +149,10 @@ export function TechnicalProfiles({
     (user: any) => user.rol === "Agremiado",
   );
   const [query, setQuery] = useState("");
+  const [feedback, setFeedback] = useState<{
+    type: "ok" | "error";
+    text: string;
+  } | null>(null);
   const [targetId, setTargetId] = useState(session.id);
   const target =
     db.usuarios.find((user: any) => user.id === targetId) || session;
@@ -217,12 +221,17 @@ export function TechnicalProfiles({
       family.filter((_: any, i: number) => i !== index),
     );
   const guardar = async () => {
+    setFeedback(null);
     if (completion < 100)
-      return alert(
-        "Complete los datos personales obligatorios antes de continuar.",
-      );
+      return setFeedback({
+        type: "error",
+        text: "Completa los datos personales obligatorios antes de continuar.",
+      });
     if (!extra.consentimiento)
-      return alert("Debe aceptar el consentimiento de tratamiento de datos.");
+      return setFeedback({
+        type: "error",
+        text: "Debes aceptar el consentimiento de tratamiento de datos.",
+      });
     const nextUser = profile.__user || target;
     const clean = {
       ...profile,
@@ -255,15 +264,25 @@ export function TechnicalProfiles({
           payload.db?.usuarios?.find((u: any) => u.id === session.id) ||
             nextUser,
         );
-        alert("Perfil sociodemográfico guardado correctamente en Supabase.");
+        setFeedback({
+          type: "ok",
+          text: "Perfil guardado correctamente en Supabase.",
+        });
       } catch (error: any) {
-        alert(error.message || "No se pudo guardar el perfil sociodemográfico");
+        setFeedback({
+          type: "error",
+          text:
+            error.message || "No se pudo guardar el perfil sociodemográfico",
+        });
       }
       return;
     }
     await save(next, `Perfil sociodemográfico actualizado: ${nextUser.nombre}`);
     if (target.id === session.id) setSession(nextUser);
-    alert("Perfil sociodemográfico guardado correctamente en Supabase.");
+    setFeedback({
+      type: "ok",
+      text: "Perfil guardado correctamente en Supabase.",
+    });
   };
   const userDraft = profile.__user || target;
   const age = profile.fechaNacimiento
@@ -793,6 +812,11 @@ export function TechnicalProfiles({
             Limpiar cambios
           </button>
         </div>
+        {feedback && (
+          <div className={`profileFeedback ${feedback.type}`}>
+            {feedback.text}
+          </div>
+        )}
       </div>
     </div>
   );

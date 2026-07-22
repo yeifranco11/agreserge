@@ -23,6 +23,27 @@ export async function PUT(request: Request) {
       );
     const supabase = requireSupabaseAdmin() as any;
     const now = new Date().toISOString();
+    const normalizedDocument = String(profile.documento).replace(/\D/g, "");
+    const { data: duplicate, error: duplicateError } = await supabase
+      .from("agreserge_profiles")
+      .select("user_id")
+      .eq("documento", normalizedDocument)
+      .neq("user_id", userId)
+      .maybeSingle();
+    if (duplicateError) throw duplicateError;
+    if (duplicate) {
+      const { data: owner } = await supabase
+        .from("agreserge_users")
+        .select("nombre")
+        .eq("id", duplicate.user_id)
+        .maybeSingle();
+      return NextResponse.json(
+        {
+          error: `El documento ${normalizedDocument} ya pertenece a otra ficha${owner?.nombre ? `: ${owner.nombre}` : ""}. Verifica el número antes de guardar.`,
+        },
+        { status: 409 },
+      );
+    }
     const { error: userError } = await supabase
       .from("agreserge_users")
       .update({
@@ -34,7 +55,7 @@ export async function PUT(request: Request) {
     if (userError) throw userError;
     const row = {
       user_id: userId,
-      documento: String(profile.documento).trim(),
+      documento: normalizedDocument,
       lugar_expedicion: profile.lugarExpedicion || null,
       cnv: profile.cnv || null,
       fecha_ingreso: profile.fechaIngreso || null,
@@ -78,17 +99,15 @@ export async function PUT(request: Request) {
       .from("agreserge_profiles")
       .upsert(row, { onConflict: "user_id" });
     if (profileError) throw profileError;
-    await supabase
-      .from("agreserge_audit")
-      .insert({
-        usuario_id: userId,
-        evento: "Perfil sociodemográfico actualizado por el afiliado",
-        metadata: {
-          completado: Boolean(
-            profile.datosAdicionales?.perfilSociodemograficoCompletado,
-          ),
-        },
-      });
+    await supabase.from("agreserge_audit").insert({
+      usuario_id: userId,
+      evento: "Perfil sociodemográfico actualizado por el afiliado",
+      metadata: {
+        completado: Boolean(
+          profile.datosAdicionales?.perfilSociodemograficoCompletado,
+        ),
+      },
+    });
     return NextResponse.json({ ok: true, db: await loadDB() });
   } catch (error: any) {
     return NextResponse.json(
