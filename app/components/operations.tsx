@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   CheckCircle2,
   Download,
@@ -14,7 +14,9 @@ import {
   createDigitalRequest,
   decideDigitalRequest,
   loadPayrollReport,
+  loadPayrollPeriods,
   lookupPayroll,
+  openPayrollPeriod,
 } from "../../lib/agreserge-client";
 
 const SHEET_URL =
@@ -33,6 +35,29 @@ export function NominaComprobantes({ session }: any) {
   const [error, setError] = useState("");
   const [report, setReport] = useState<any>(null);
   const [reportLoading, setReportLoading] = useState(false);
+  const [periods, setPeriods] = useState<any[]>([]);
+  const [periodLoading, setPeriodLoading] = useState(false);
+  const now = new Date();
+  const monthNames = [
+    "Enero",
+    "Febrero",
+    "Marzo",
+    "Abril",
+    "Mayo",
+    "Junio",
+    "Julio",
+    "Agosto",
+    "Septiembre",
+    "Octubre",
+    "Noviembre",
+    "Diciembre",
+  ];
+  const [period, setPeriod] = useState<any>({
+    mes: monthNames[now.getMonth()],
+    anio: String(now.getFullYear()),
+    sheetUrl: SHEET_URL,
+  });
+  const isAffiliate = session.rol === "Agremiado";
   const canManage = [
     "Administrador de Sistemas",
     "Coordinadora",
@@ -46,12 +71,47 @@ export function NominaComprobantes({ session }: any) {
     "Gerente",
   ].includes(session.rol);
 
+  const refreshPeriods = async () => {
+    try {
+      const payload = await loadPayrollPeriods();
+      setPeriods(payload.periods || []);
+      if (payload.periods?.length)
+        setPeriod((current: any) => ({
+          ...current,
+          mes: payload.periods[0].mes,
+          anio: payload.periods[0].anio,
+        }));
+    } catch (e: any) {
+      setError(e.message);
+    }
+  };
+  useEffect(() => {
+    refreshPeriods();
+  }, []);
+  const abrirPeriodo = async () => {
+    setPeriodLoading(true);
+    setError("");
+    try {
+      await openPayrollPeriod(period.mes, period.anio, period.sheetUrl);
+      await refreshPeriods();
+      alert(`Nómina ${period.mes} ${period.anio} guardada en el historial.`);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setPeriodLoading(false);
+    }
+  };
+
   const buscar = async () => {
     setLoading(true);
     setError("");
     setPayroll(null);
     try {
-      const result = await lookupPayroll(documento);
+      const result = await lookupPayroll(
+        isAffiliate ? "" : documento,
+        period.mes,
+        period.anio,
+      );
       setPayroll(result.payroll);
     } catch (e: any) {
       setError(e.message);
@@ -79,8 +139,14 @@ export function NominaComprobantes({ session }: any) {
       .replace("Cargo / proceso", "PROCESO")
       .replace("<b>Área</b>", "<b>ÁREA O SERVICIO</b>")
       .replace("Otras compensaciones", "Compensación por descanso")
-      .replace("<span>Transporte</span>", "<span>Compensación por transporte</span>")
-      .replace("Tiempo adicional / triage", "Compensación por tiempo adicional");
+      .replace(
+        "<span>Transporte</span>",
+        "<span>Compensación por transporte</span>",
+      )
+      .replace(
+        "Tiempo adicional / triage",
+        "Compensación por tiempo adicional",
+      );
     const brand = windowRef.document.querySelector(".head > div");
     if (brand) {
       const logo = windowRef.document.createElement("img");
@@ -166,6 +232,71 @@ export function NominaComprobantes({ session }: any) {
         </div>
       </div>
       {canManage && (
+        <div className="card span12 payrollPeriodCard">
+          <div className="row between">
+            <div>
+              <span className="welcomeTag">Apertura mensual</span>
+              <h3>Abrir nueva nómina e historial</h3>
+              <p className="muted">
+                Crea una copia del formato maestro en Google Sheets, pega aquí
+                su enlace y habilita el periodo para los afiliados.
+              </p>
+            </div>
+            <a
+              className="btn"
+              href="https://docs.google.com/spreadsheets/d/11R2hU9IzD55MBa8FivztC38boeQAxGpoMly_3yH0Ajk/copy"
+              target="_blank"
+            >
+              Crear copia mensual
+            </a>
+          </div>
+          <div className="periodControls">
+            <select
+              value={period.mes}
+              onChange={(e) => setPeriod({ ...period, mes: e.target.value })}
+            >
+              {monthNames.map((m) => (
+                <option key={m}>{m}</option>
+              ))}
+            </select>
+            <input
+              className="input"
+              type="number"
+              value={period.anio}
+              onChange={(e) => setPeriod({ ...period, anio: e.target.value })}
+            />
+            <input
+              className="input periodUrl"
+              value={period.sheetUrl}
+              onChange={(e) =>
+                setPeriod({ ...period, sheetUrl: e.target.value })
+              }
+              placeholder="Enlace del nuevo Google Sheets mensual"
+            />
+            <button
+              className="btn primary"
+              disabled={periodLoading}
+              onClick={abrirPeriodo}
+            >
+              {periodLoading ? "Abriendo…" : "Abrir mes y guardar historial"}
+            </button>
+          </div>
+          <div className="periodHistory">
+            {periods.map((p: any) => (
+              <a key={`${p.anio}-${p.mes}`} href={p.sourceUrl} target="_blank">
+                <b>
+                  {p.mes} {p.anio}
+                </b>
+                <span>Consultar Excel</span>
+              </a>
+            ))}
+            {!periods.length && (
+              <span className="muted">Todavía no hay meses abiertos.</span>
+            )}
+          </div>
+        </div>
+      )}
+      {canManage && (
         <div className="card span12">
           <div className="row between">
             <div>
@@ -191,8 +322,8 @@ export function NominaComprobantes({ session }: any) {
             <div>
               <h3>Inteligencia e informes de nómina</h3>
               <p className="muted">
-                Indicadores automáticos por hospital, proceso y área o servicio tomados de la
-                hoja vigente.
+                Indicadores automáticos por hospital, proceso y área o servicio
+                tomados de la hoja vigente.
               </p>
             </div>
             <div className="row">
@@ -252,24 +383,60 @@ export function NominaComprobantes({ session }: any) {
       )}
       <div className="card span4">
         <h3>
-          <Search size={19} /> Buscar comprobante
+          <Search size={19} />{" "}
+          {isAffiliate ? "Mi comprobante por periodo" : "Buscar comprobante"}
         </h3>
-        <div className="field">
-          <label>Número de documento</label>
-          <input
-            className="input"
-            inputMode="numeric"
-            value={documento}
-            onChange={(e) => setDocumento(e.target.value.replace(/\D/g, ""))}
-            placeholder="Ej. 1112623101"
-          />
-        </div>
+        {isAffiliate ? (
+          <>
+            <div className="field">
+              <label>Año</label>
+              <select
+                value={period.anio}
+                onChange={(e) => setPeriod({ ...period, anio: e.target.value })}
+              >
+                {[...new Set(periods.map((p: any) => p.anio))].map(
+                  (year: any) => (
+                    <option key={year}>{year}</option>
+                  ),
+                )}
+              </select>
+            </div>
+            <div className="field">
+              <label>Mes</label>
+              <select
+                value={period.mes}
+                onChange={(e) => setPeriod({ ...period, mes: e.target.value })}
+              >
+                {periods
+                  .filter((p: any) => String(p.anio) === String(period.anio))
+                  .map((p: any) => (
+                    <option key={p.mes}>{p.mes}</option>
+                  ))}
+              </select>
+            </div>
+          </>
+        ) : (
+          <div className="field">
+            <label>Número de documento</label>
+            <input
+              className="input"
+              inputMode="numeric"
+              value={documento}
+              onChange={(e) => setDocumento(e.target.value.replace(/\D/g, ""))}
+              placeholder="Ej. 1112623101"
+            />
+          </div>
+        )}
         <button
           className="btn primary"
-          disabled={loading || !documento}
+          disabled={loading || (isAffiliate ? !periods.length : !documento)}
           onClick={buscar}
         >
-          {loading ? "Consultando nómina..." : "Consultar en línea"}
+          {loading
+            ? "Consultando nómina..."
+            : isAffiliate
+              ? "Ver mi comprobante"
+              : "Consultar en línea"}
         </button>
         {error && <p className="obsBox">{error}</p>}
         <p className="mini">
@@ -288,11 +455,20 @@ export function NominaComprobantes({ session }: any) {
           <div className="payrollSlip">
             <div className="row between">
               <div className="row">
-                <img src="/logo.png" alt="AGRESERGE" style={{width:72,height:72,objectFit:"contain"}} />
+                <img
+                  src="/logo.png"
+                  alt="AGRESERGE"
+                  style={{ width: 72, height: 72, objectFit: "contain" }}
+                />
                 <div>
-                <span className="welcomeTag">Comprobante de compensación</span>
-                <h2>{payroll.nombre}</h2>
-                <p>{payroll.documento} · PROCESO: {payroll.cargo} · ÁREA O SERVICIO: {payroll.area}</p>
+                  <span className="welcomeTag">
+                    Comprobante de compensación
+                  </span>
+                  <h2>{payroll.nombre}</h2>
+                  <p>
+                    {payroll.documento} · PROCESO: {payroll.cargo} · ÁREA O
+                    SERVICIO: {payroll.area}
+                  </p>
                 </div>
               </div>
               <button className="btn primary" onClick={imprimir}>
@@ -306,7 +482,10 @@ export function NominaComprobantes({ session }: any) {
                   label="Compensación ordinaria"
                   value={payroll.ordinaria}
                 />
-                <Money label="Compensación por descanso" value={payroll.otras} />
+                <Money
+                  label="Compensación por descanso"
+                  value={payroll.otras}
+                />
                 <Money
                   label="Compensación por transporte"
                   value={payroll.transporte}

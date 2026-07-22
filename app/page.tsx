@@ -1439,7 +1439,10 @@ function Cargue({ db, setDb, session }: any) {
     try {
       let occupied = Boolean(d.archivo);
       for (const file of Array.from(files)) {
-        const payload = await uploadDocument(d.id, file, occupied);
+        const payload = await uploadDocument(d.id, file, occupied, {
+          name: d.nombre,
+          category: d.categoria,
+        });
         syncDb(payload);
         occupied = true;
       }
@@ -1799,16 +1802,47 @@ function MisAgremiados({ db, session }: any) {
   );
 }
 function Informes({ db, save, session }: any) {
-  const limited = ["Líder Institucional", "Líder de Proceso", "Coordinador de Proceso AGRESERGE"].includes(session.rol);
+  const limited = [
+    "Líder Institucional",
+    "Líder de Proceso",
+    "Coordinador de Proceso AGRESERGE",
+  ].includes(session.rol);
   const visibles = limited
-    ? db.asignacionesMensuales.filter((a: Asignacion) => a.responsableId === session.id || a.coordinadorId === session.id)
+    ? db.asignacionesMensuales.filter(
+        (a: Asignacion) =>
+          a.responsableId === session.id || a.coordinadorId === session.id,
+      )
     : db.asignacionesMensuales;
-  const canDelegate = ["Coordinador de Proceso AGRESERGE", "Coordinadora Administrativa y Financiera", "Coordinación Administrativa", "Coordinación Asistencial", "Coordinación General", "Director Ejecutivo", "Administrador de Sistemas"].includes(session.rol);
-  const leaders = db.usuarios.filter((u: Usuario) => u.activo && ["Líder Institucional", "Líder de Proceso"].includes(u.rol));
+  const canDelegate = [
+    "Coordinador de Proceso AGRESERGE",
+    "Coordinadora Administrativa y Financiera",
+    "Coordinación Administrativa",
+    "Coordinación Asistencial",
+    "Coordinación General",
+    "Director Ejecutivo",
+    "Administrador de Sistemas",
+  ].includes(session.rol);
+  const leaders = db.usuarios.filter(
+    (u: Usuario) =>
+      u.activo && ["Líder Institucional", "Líder de Proceso"].includes(u.rol),
+  );
   const delegar = (assignment: Asignacion, responsableId: string) => {
     if (!responsableId) return;
-    const asignacionesMensuales = db.asignacionesMensuales.map((item: Asignacion) => item.id === assignment.id ? { ...item, coordinadorId: assignment.coordinadorId || session.id, responsableId, estado: "Asignado" } : item);
-    save({ ...db, asignacionesMensuales }, `Informe Anexo ${assignment.anexo} delegado a ${usuarioNombre(db, responsableId)}`);
+    const asignacionesMensuales = db.asignacionesMensuales.map(
+      (item: Asignacion) =>
+        item.id === assignment.id
+          ? {
+              ...item,
+              coordinadorId: assignment.coordinadorId || session.id,
+              responsableId,
+              estado: "Asignado",
+            }
+          : item,
+    );
+    save(
+      { ...db, asignacionesMensuales },
+      `Informe Anexo ${assignment.anexo} delegado a ${usuarioNombre(db, responsableId)}`,
+    );
   };
   const cargar = async (a: Asignacion, file?: File) => {
     if (!file) return;
@@ -1840,7 +1874,9 @@ function Informes({ db, save, session }: any) {
           : "Informes de actividades"}
       </h3>
       <p className="muted">
-        Cada coordinador recibe su copia mensual y puede delegar componentes a líderes de área. La trazabilidad conserva al coordinador y al responsable actual para consolidar el informe final.
+        Cada coordinador recibe su copia mensual y puede delegar componentes a
+        líderes de área. La trazabilidad conserva al coordinador y al
+        responsable actual para consolidar el informe final.
       </p>
       {visibles.length === 0 ? (
         <div className="emptyState">
@@ -1878,7 +1914,27 @@ function Informes({ db, save, session }: any) {
                 <td>
                   {a.mes} {a.anio}
                 </td>
-                {canDelegate && <td><select value={a.responsableId} onChange={(e) => delegar(a, e.target.value)}><option value={a.responsableId}>{usuarioNombre(db, a.responsableId)}</option>{leaders.filter((leader: Usuario) => leader.id !== a.responsableId).map((leader: Usuario) => <option key={leader.id} value={leader.id}>{leader.nombre}</option>)}</select></td>}
+                {canDelegate && (
+                  <td>
+                    <select
+                      value={a.responsableId}
+                      onChange={(e) => delegar(a, e.target.value)}
+                    >
+                      <option value={a.responsableId}>
+                        {usuarioNombre(db, a.responsableId)}
+                      </option>
+                      {leaders
+                        .filter(
+                          (leader: Usuario) => leader.id !== a.responsableId,
+                        )
+                        .map((leader: Usuario) => (
+                          <option key={leader.id} value={leader.id}>
+                            {leader.nombre}
+                          </option>
+                        ))}
+                    </select>
+                  </td>
+                )}
                 <td>
                   <a
                     className="link"

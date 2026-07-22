@@ -32,11 +32,14 @@ export async function uploadDocument(
   documentId: string,
   file: File,
   append = false,
+  metadata: { name?: string; category?: string } = {},
 ) {
   const form = new FormData();
   form.append("documentId", documentId);
   form.append("file", file);
   form.append("append", String(append));
+  form.append("documentName", metadata.name || "Documento");
+  form.append("category", metadata.category || "General");
   const response = await fetch("/api/agreserge-documents", {
     method: "POST",
     body: form,
@@ -104,8 +107,24 @@ async function postJson(url: string, body: unknown) {
   return payload;
 }
 
-export const lookupPayroll = (documento: string) =>
-  postJson("/api/agreserge-payroll/lookup", { documento });
+export const lookupPayroll = (documento = "", mes = "", anio = "") =>
+  postJson("/api/agreserge-payroll/lookup", { documento, mes, anio });
+export async function loadPayrollPeriods() {
+  const response = await fetch("/api/agreserge-payroll/periods", {
+    cache: "no-store",
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok)
+    throw new Error(
+      payload?.error || "No se pudo cargar el historial de nómina",
+    );
+  return payload;
+}
+export const openPayrollPeriod = (
+  mes: string,
+  anio: string,
+  sheetUrl: string,
+) => postJson("/api/agreserge-payroll/periods", { mes, anio, sheetUrl });
 export async function loadPayrollReport() {
   const response = await fetch("/api/agreserge-payroll/report", {
     cache: "no-store",
