@@ -2,6 +2,7 @@
 
 import { Plus, Save, Search, Trash2, UserRound } from "lucide-react";
 import { useMemo, useState } from "react";
+import { saveOwnProfile } from "../../lib/agreserge-client";
 
 const privileged = [
   "Administrador de Sistemas",
@@ -136,7 +137,13 @@ export function isSocioProfileComplete(profile: any) {
   );
 }
 
-export function TechnicalProfiles({ db, save, session, setSession }: any) {
+export function TechnicalProfiles({
+  db,
+  save,
+  setDb,
+  session,
+  setSession,
+}: any) {
   const canBrowse = privileged.includes(session.rol);
   const affiliates = db.usuarios.filter(
     (user: any) => user.rol === "Agremiado",
@@ -209,7 +216,7 @@ export function TechnicalProfiles({ db, save, session, setSession }: any) {
       "familia",
       family.filter((_: any, i: number) => i !== index),
     );
-  const guardar = () => {
+  const guardar = async () => {
     if (completion < 100)
       return alert(
         "Complete los datos personales obligatorios antes de continuar.",
@@ -234,7 +241,27 @@ export function TechnicalProfiles({ db, save, session, setSession }: any) {
       ),
       perfiles: { ...(db.perfiles || {}), [target.id]: clean },
     };
-    save(next, `Perfil sociodemográfico actualizado: ${nextUser.nombre}`);
+    if (session.rol === "Agremiado") {
+      try {
+        const payload = await saveOwnProfile(clean, nextUser);
+        if (payload.db) {
+          setDb(payload.db);
+          localStorage.setItem(
+            "portal_agreserge_db_v31",
+            JSON.stringify(payload.db),
+          );
+        }
+        setSession(
+          payload.db?.usuarios?.find((u: any) => u.id === session.id) ||
+            nextUser,
+        );
+        alert("Perfil sociodemográfico guardado correctamente en Supabase.");
+      } catch (error: any) {
+        alert(error.message || "No se pudo guardar el perfil sociodemográfico");
+      }
+      return;
+    }
+    await save(next, `Perfil sociodemográfico actualizado: ${nextUser.nombre}`);
     if (target.id === session.id) setSession(nextUser);
     alert("Perfil sociodemográfico guardado correctamente en Supabase.");
   };
