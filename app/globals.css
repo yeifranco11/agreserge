@@ -410,14 +410,34 @@ textarea:focus {
 }
 .affiliateUploadWorkspace .documentList {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 12px;
 }
 .affiliateUploadWorkspace .docItem {
   margin: 0;
-  padding: 16px;
+  padding: 18px 20px;
   border-radius: 20px;
   box-shadow: 0 8px 24px rgba(20, 65, 108, 0.06);
+  grid-template-columns: minmax(260px, 1.25fr) 120px minmax(240px, 0.9fr);
+  align-items: center;
+}
+.affiliateUploadWorkspace .docItem > .obsBox {
+  grid-column: auto;
+  margin: 0;
+}
+.affiliateUploadWorkspace .docItem > .row {
+  grid-column: 1 / -1;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  padding-top: 4px;
+}
+.affiliateUploadWorkspace .docItem > .row .input {
+  flex: 1 1 250px;
+}
+.affiliateUploadWorkspace .docItem:hover {
+  border-color: #b6d6f3;
+  transform: translateY(-1px);
+  box-shadow: 0 12px 30px rgba(20, 65, 108, 0.1);
 }
 .affiliateUploadWorkspace input[type="file"] {
   padding: 8px;
@@ -582,6 +602,15 @@ textarea:focus {
   }
   .affiliateUploadWorkspace .documentList {
     grid-template-columns: 1fr;
+  }
+  .affiliateUploadWorkspace .docItem,
+  .affiliateUploadWorkspace .docItem > .obsBox,
+  .affiliateUploadWorkspace .docItem > .row {
+    grid-column: auto;
+    grid-template-columns: 1fr;
+  }
+  .affiliateUploadWorkspace .docItem > .row {
+    justify-content: flex-start;
   }
   .documentPreview {
     position: static;
