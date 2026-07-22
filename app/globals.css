@@ -668,6 +668,150 @@ textarea:focus {
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.72);
 }
+.reviewFilters {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.35fr 0.8fr;
+  gap: 10px;
+  padding: 13px;
+  margin: 16px 0;
+  border: 1px solid #d8e6f4;
+  border-radius: 18px;
+  background: #f8fbff;
+}
+.reviewDirectory {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.72fr) minmax(300px, 1fr) minmax(360px, 1.35fr);
+  gap: 14px;
+  align-items: start;
+}
+.affiliateResults,
+.reviewDocuments,
+.reviewViewer {
+  min-width: 0;
+  border: 1px solid #d8e6f4;
+  border-radius: 20px;
+  background: #fff;
+  overflow: hidden;
+}
+.affiliateResults,
+.reviewDocuments {
+  max-height: 720px;
+  overflow-y: auto;
+}
+.reviewColumnTitle {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  justify-content: space-between;
+  padding: 14px;
+  background: #edf6ff;
+  color: #0b4ea2;
+}
+.reviewColumnTitle span {
+  min-width: 28px;
+  padding: 3px 8px;
+  text-align: center;
+  border-radius: 999px;
+  background: #fff;
+}
+.affiliateResult,
+.reviewDocumentButton {
+  width: calc(100% - 16px);
+  margin: 8px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: #f7faff;
+  color: #172c45;
+  padding: 12px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 9px;
+  align-items: center;
+  text-align: left;
+}
+.affiliateResult span,
+.reviewDocumentButton span {
+  min-width: 0;
+}
+.affiliateResult b,
+.affiliateResult small,
+.reviewDocumentButton b,
+.reviewDocumentButton small {
+  display: block;
+}
+.affiliateResult b,
+.reviewDocumentButton b {
+  overflow-wrap: anywhere;
+}
+.affiliateResult small,
+.reviewDocumentButton small {
+  margin-top: 4px;
+  color: #6b7d91;
+  font-size: 11px;
+  line-height: 1.35;
+}
+.affiliateResult em {
+  min-width: 28px;
+  border-radius: 999px;
+  background: #e3effc;
+  color: #0b5fae;
+  padding: 5px;
+  text-align: center;
+  font-style: normal;
+  font-weight: 900;
+}
+.affiliateResult:hover,
+.affiliateResult.active,
+.reviewDocumentButton:hover,
+.reviewDocumentButton.active {
+  border-color: #1380d3;
+  background: #edf7ff;
+  box-shadow: 0 0 0 3px rgba(19, 128, 211, 0.1);
+}
+.selectedAffiliateHeader {
+  padding: 16px;
+  border-bottom: 1px solid #e2ebf4;
+  background: linear-gradient(135deg, #f7fbff, #edf6ff);
+}
+.selectedAffiliateHeader h3 {
+  margin: 7px 0 3px;
+}
+.selectedAffiliateHeader p {
+  margin: 0 0 9px;
+  color: #64748b;
+  font-size: 12px;
+}
+.reviewDocumentButton i {
+  font-style: normal;
+  white-space: nowrap;
+}
+.reviewViewer {
+  position: sticky;
+  top: 16px;
+  padding: 14px;
+  min-height: 620px;
+  box-shadow: 0 16px 42px rgba(20, 64, 107, 0.1);
+}
+.reviewPreviewFrame {
+  width: 100%;
+  height: 480px;
+  display: block;
+  object-fit: contain;
+  border: 1px solid #d7e4f0;
+  border-radius: 14px;
+  background: #eef3f8;
+}
+.reviewActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.previewEmpty.compact {
+  min-height: 150px;
+  height: auto;
+}
 .barRow {
   display: grid;
   grid-template-columns: 110px 1fr 42px;
@@ -716,6 +860,17 @@ textarea:focus {
 @media (max-width: 900px) {
   .filterBox {
     grid-template-columns: 1fr;
+  }
+  .reviewFilters,
+  .reviewDirectory {
+    grid-template-columns: 1fr;
+  }
+  .reviewViewer {
+    position: static;
+    min-height: auto;
+  }
+  .reviewPreviewFrame {
+    height: 440px;
   }
   .barRow {
     grid-template-columns: 1fr;

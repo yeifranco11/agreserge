@@ -1554,17 +1554,35 @@ function Cargue({ db, setDb, session }: any) {
   );
 }
 function Revision({ db, save }: any) {
-  const [ver, setVer] = useState<Documento | null>(null);
-  const [f, setF] = useState({ entidadId: "", q: "", estado: "" });
+  const [selectedUserId, setSelectedUserId] = useState("");
+  const [selectedDocId, setSelectedDocId] = useState("");
+  const [f, setF] = useState({
+    entidadId: "",
+    areaId: "",
+    q: "",
+    estado: "",
+  });
+  const filteredAreas = db.areas.filter(
+    (area: Area) => !f.entidadId || area.entidadId === f.entidadId,
+  );
   const ag = db.usuarios
     .filter((u: Usuario) => u.rol === "Agremiado")
     .filter(
       (u: Usuario) =>
         (!f.entidadId || u.entidadId === f.entidadId) &&
+        (!f.areaId || u.areaId === f.areaId) &&
         (!f.q ||
-          u.nombre.toLowerCase().includes(f.q.toLowerCase()) ||
-          u.correo.toLowerCase().includes(f.q.toLowerCase())),
+          `${u.nombre} ${u.correo} ${db.perfiles?.[u.id]?.documento || ""}`
+            .toLowerCase()
+            .includes(f.q.toLowerCase())),
     );
+  const selectedUser = ag.find((u: Usuario) => u.id === selectedUserId);
+  const selectedDocs: Documento[] = selectedUser
+    ? (db.documentos[selectedUser.id] || []).filter(
+        (d: Documento) => !f.estado || d.estado === f.estado,
+      )
+    : [];
+  const selectedDoc = selectedDocs.find((d) => d.id === selectedDocId);
   const cambiar = (uidDoc: string, docId: string, estado: EstadoDoc) => {
     const obs = prompt(`Observación para estado ${estado}`, "") || "";
     const lista = (db.documentos[uidDoc] || []).map((d: Documento) =>
@@ -1585,26 +1603,47 @@ function Revision({ db, save }: any) {
     <div className="card">
       <h3>Revisión documental con previsualización</h3>
       <p className="muted">
-        Filtre por hospital, busque por nombre/correo y revise cada soporte en
-        pantalla antes de aprobar, rechazar o devolver.
+        Filtre por entidad y área, seleccione al afiliado y revise sus soportes
+        directamente en pantalla antes de aprobar, rechazar o devolver.
       </p>
-      <div className="filterBox">
+      <div className="reviewFilters">
         <select
           value={f.entidadId}
-          onChange={(e) => setF({ ...f, entidadId: e.target.value })}
+          onChange={(e) => {
+            setF({ ...f, entidadId: e.target.value, areaId: "" });
+            setSelectedUserId("");
+            setSelectedDocId("");
+          }}
         >
-          <option value="">Todos los hospitales</option>
+          <option value="">Todas las entidades</option>
           {db.entidades.map((e: Entidad) => (
             <option key={e.id} value={e.id}>
               {e.nombre}
             </option>
           ))}
         </select>
+        <select
+          value={f.areaId}
+          onChange={(e) => {
+            setF({ ...f, areaId: e.target.value });
+            setSelectedUserId("");
+            setSelectedDocId("");
+          }}
+        >
+          <option value="">Todas las áreas o servicios</option>
+          {filteredAreas.map((area: Area) => (
+            <option key={area.id} value={area.id}>{area.nombre}</option>
+          ))}
+        </select>
         <input
           className="input"
-          placeholder="Buscar agremiado por nombre o correo"
+          placeholder="Buscar por nombre, documento o correo"
           value={f.q}
-          onChange={(e) => setF({ ...f, q: e.target.value })}
+          onChange={(e) => {
+            setF({ ...f, q: e.target.value });
+            setSelectedUserId("");
+            setSelectedDocId("");
+          }}
         />
         <select
           value={f.estado}
@@ -1618,124 +1657,57 @@ function Revision({ db, save }: any) {
           <option>Devuelto</option>
         </select>
       </div>
-      {ag.map((u: Usuario) => {
-        const docs = (db.documentos[u.id] || []).filter(
-          (d: Documento) => !f.estado || d.estado === f.estado,
-        );
-        if (!docs.length) return null;
-        return (
-          <div className="docReview" key={u.id}>
-            <div className="personHeader">
-              <div>
-                <b>{u.nombre}</b>
-                <br />
-                <span className="mini">
-                  {entidadNombre(db, u.entidadId)} · {areaNombre(db, u.areaId)}{" "}
-                  · {u.tipo}
-                </span>
-              </div>
-              <span className="badge">
-                Líder: {usuarioNombre(db, u.liderId)}
-              </span>
-            </div>
-            {docs.map((d: Documento) => (
-              <div className="docItem" key={d.id}>
-                <div>
-                  <b>{d.nombre}</b>
-                  <br />
-                  <span className="mini">
-                    {d.archivo
-                      ? `${d.archivo.nombre} · ${bytes(d.archivo.tamano)} · ${d.fechaCarga}`
-                      : "Sin archivo"}
-                  </span>
-                </div>
-                <span
-                  className={`pill ${d.estado === "Aprobado" ? "ok" : d.estado === "Rechazado" ? "bad" : d.estado === "Devuelto" ? "obs" : d.estado === "Cargado" ? "rev" : "pend"}`}
-                >
-                  {d.estado}
-                </span>
-                <p className="obsBox">{d.observacion}</p>
-                <div className="row">
-                  {d.archivo && (
-                    <button className="btn" onClick={() => setVer(d)}>
-                      <Eye size={14} /> Previsualizar
-                    </button>
-                  )}
-                  <button
-                    className="btn"
-                    onClick={() => cambiar(u.id, d.id, "Aprobado")}
-                  >
-                    Aprobado
-                  </button>
-                  <button
-                    className="btn danger"
-                    onClick={() => cambiar(u.id, d.id, "Rechazado")}
-                  >
-                    Rechazado
-                  </button>
-                  <button
-                    className="btn obsBtn"
-                    onClick={() => cambiar(u.id, d.id, "Devuelto")}
-                  >
-                    Devuelto
-                  </button>
-                </div>
-              </div>
-            ))}
+      <div className="reviewDirectory">
+        <aside className="affiliateResults">
+          <div className="reviewColumnTitle">
+            <b>Afiliados encontrados</b><span>{ag.length}</span>
           </div>
-        );
-      })}
-      {ver && <Preview doc={ver} close={() => setVer(null)} />}
-    </div>
-  );
-}
-function Preview({ doc, close }: any) {
-  const a = doc.archivo as ArchivoLocal;
-  const isPdf =
-    a.tipo === "application/pdf" || a.nombre.toLowerCase().endsWith(".pdf");
-  const isImg = a.tipo.startsWith("image/");
-  const url = useMemo(() => dataUrlToBlobUrl(a.dataUrl), [a.dataUrl]);
-  useEffect(
-    () => () => {
-      if (url.startsWith("blob:")) URL.revokeObjectURL(url);
-    },
-    [url],
-  );
-  return (
-    <div className="modal">
-      <div className="modalBox previewBox">
-        <div className="row previewTop">
-          <div>
-            <h3>{doc.nombre}</h3>
-            <p className="muted">
-              {a.nombre} · {a.tipo} · {bytes(a.tamano)}
-            </p>
-          </div>
-          <button className="btn danger" onClick={close}>
-            <XCircle size={16} /> Cerrar
-          </button>
-        </div>
-        <div className="previewArea">
-          {isImg ? (
-            <img src={url} className="previewFrame" />
-          ) : isPdf ? (
-            <iframe title={a.nombre} src={url} className="previewObject" />
-          ) : (
-            <div className="previewFallback">
-              <FileText size={48} />
-              <b>Previsualización no disponible para este formato.</b>
-              <span>Puede descargar el archivo para revisarlo.</span>
-            </div>
-          )}
-        </div>
-        <div className="row">
-          <a className="btn" href={url} target="_blank" rel="noreferrer">
-            <Eye size={14} /> Abrir en pestaña
-          </a>
-          <a className="btn" href={url} download={a.nombre}>
-            <Download size={14} /> Descargar archivo
-          </a>
-        </div>
+          {ag.map((u: Usuario) => {
+            const loaded = (db.documentos[u.id] || []).filter((d: Documento) => d.archivo).length;
+            return (
+              <button
+                key={u.id}
+                className={`affiliateResult ${u.id === selectedUserId ? "active" : ""}`}
+                onClick={() => { setSelectedUserId(u.id); setSelectedDocId(""); }}
+              >
+                <UserCog size={18} />
+                <span><b>{u.nombre}</b><small>{entidadNombre(db, u.entidadId)} · {areaNombre(db, u.areaId)}</small></span>
+                <em>{loaded}</em>
+              </button>
+            );
+          })}
+          {!ag.length && <div className="previewEmpty compact"><b>Sin resultados</b><span>Cambie los filtros de búsqueda.</span></div>}
+        </aside>
+        <section className="reviewDocuments">
+          {selectedUser ? (
+            <>
+              <div className="selectedAffiliateHeader">
+                <div><span className="welcomeTag">Afiliado partícipe</span><h3>{selectedUser.nombre}</h3><p>{entidadNombre(db, selectedUser.entidadId)} · {areaNombre(db, selectedUser.areaId)} · {selectedUser.tipo}</p></div>
+                <span className="badge">Líder: {usuarioNombre(db, selectedUser.liderId)}</span>
+              </div>
+              <div className="reviewDocumentList">
+                {selectedDocs.map((d) => (
+                  <button key={d.id} className={`reviewDocumentButton ${d.id === selectedDocId ? "active" : ""}`} onClick={() => setSelectedDocId(d.id)}>
+                    <FileText size={18} />
+                    <span><b>{d.nombre}</b><small>{d.archivo ? `${d.archivo.nombre} · ${bytes(d.archivo.tamano)}` : "Pendiente por cargar"}</small></span>
+                    <i className={`pill ${d.estado === "Aprobado" ? "ok" : d.estado === "Rechazado" ? "bad" : d.estado === "Devuelto" ? "obs" : d.estado === "Cargado" ? "rev" : "pend"}`}>{d.estado}</i>
+                  </button>
+                ))}
+                {!selectedDocs.length && <div className="previewEmpty compact"><b>Sin documentos</b><span>No hay soportes para el estado seleccionado.</span></div>}
+              </div>
+            </>
+          ) : <div className="previewEmpty"><Users size={52} /><b>Seleccione un afiliado</b><span>Al hacer clic en su nombre aparecerán aquí todos sus documentos.</span></div>}
+        </section>
+        <aside className="reviewViewer">
+          {selectedDoc?.archivo ? (
+            <>
+              <div className="previewHeading"><div><span className="welcomeTag">Documento seleccionado</span><h3>{selectedDoc.nombre}</h3></div><a className="btn ghost" href={selectedDoc.archivo.dataUrl} target="_blank" rel="noreferrer"><Eye size={14} /> Abrir</a></div>
+              {selectedDoc.archivo.tipo.startsWith("image/") ? <img className="reviewPreviewFrame" src={selectedDoc.archivo.dataUrl} alt={selectedDoc.archivo.nombre} /> : selectedDoc.archivo.tipo === "application/pdf" || selectedDoc.archivo.nombre.toLowerCase().endsWith(".pdf") ? <iframe className="reviewPreviewFrame" src={selectedDoc.archivo.dataUrl} title={selectedDoc.archivo.nombre} /> : <div className="previewEmpty"><FileText size={52} /><b>{selectedDoc.archivo.nombre}</b><span>Abra el archivo para revisarlo en su visor compatible.</span></div>}
+              <p className="obsBox">{selectedDoc.observacion}</p>
+              <div className="reviewActions"><button className="btn" onClick={() => cambiar(selectedUser!.id, selectedDoc.id, "Aprobado")}><CheckCircle2 size={15} /> Aprobar</button><button className="btn danger" onClick={() => cambiar(selectedUser!.id, selectedDoc.id, "Rechazado")}><XCircle size={15} /> Rechazar</button><button className="btn obsBtn" onClick={() => cambiar(selectedUser!.id, selectedDoc.id, "Devuelto")}>Devolver</button></div>
+            </>
+          ) : <div className="previewEmpty"><Eye size={52} /><b>Seleccione un documento cargado</b><span>La previsualización aparecerá aquí mismo.</span></div>}
+        </aside>
       </div>
     </div>
   );
