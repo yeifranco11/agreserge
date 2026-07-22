@@ -35,6 +35,7 @@ import {
   openRemoteDrivePeriod,
   remoteLogin,
   remoteLogout,
+  reviewAffiliateDocuments,
   saveRemoteDB,
   uploadDocument,
 } from "../lib/agreserge-client";
@@ -1395,7 +1396,21 @@ function Cargue({ db, setDb, session }: any) {
   ];
   const [uploading, setUploading] = useState("");
   const [previewId, setPreviewId] = useState("");
+  const [previewUrl, setPreviewUrl] = useState("");
   const previewDoc = docs.find((doc) => doc.id === previewId && doc.archivo);
+  useEffect(() => () => { if (previewUrl.startsWith("blob:")) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
+  const previsualizar = async (doc: Documento) => {
+    if (!doc.archivo) return;
+    try {
+      const response = await fetch(doc.archivo.dataUrl, { cache: "no-store" });
+      if (!response.ok) throw new Error("El archivo anterior ya no está disponible. Cárguelo nuevamente para restaurarlo.");
+      if (previewUrl.startsWith("blob:")) URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(URL.createObjectURL(await response.blob()));
+      setPreviewId(doc.id);
+    } catch (error: any) {
+      alert(error.message || "No fue posible abrir el archivo");
+    }
+  };
   const syncDb = (payload: any) => {
     if (payload.db) {
       setDb(payload.db);
@@ -1463,7 +1478,7 @@ function Cargue({ db, setDb, session }: any) {
       <p>
         <b>{pct}%</b> de requisitos documentales completos
       </p>
-      <div className="documentWorkspace">
+      <div className="documentWorkspace affiliateUploadWorkspace">
         <div className="documentList">
       {docs.map((d: Documento) => (
         <div className={`docItem ${previewId === d.id ? "selected" : ""}`} key={d.id || d.nombre}>
@@ -1506,7 +1521,7 @@ function Cargue({ db, setDb, session }: any) {
             )}
             {d.archivo && (
               <>
-                <button className="btn" onClick={() => setPreviewId(d.id)}>
+                <button className="btn" onClick={() => previsualizar(d)}>
                   <Eye size={14} /> Previsualizar
                 </button>
                 <button className="btn danger" onClick={() => eliminar(d)}>
@@ -1518,28 +1533,21 @@ function Cargue({ db, setDb, session }: any) {
         </div>
       ))}
         </div>
-        <aside className="documentPreview">
+        {previewDoc?.archivo && <div className="modal" role="dialog" aria-modal="true">
+        <aside className="documentPreview affiliatePreviewModal">
           <div className="previewHeading">
             <div>
               <span className="welcomeTag">Vista rápida</span>
               <h3>{previewDoc?.nombre || "Previsualizador"}</h3>
             </div>
             {previewDoc?.archivo && (
-              <a className="btn ghost" href={previewDoc.archivo.dataUrl} target="_blank" rel="noreferrer">
-                <Eye size={14} /> Abrir completo
-              </a>
+              <div className="row"><a className="btn ghost" href={previewDoc.archivo.dataUrl} target="_blank" rel="noreferrer"><Eye size={14} /> Abrir completo</a><button className="btn danger" onClick={() => setPreviewId("")}><XCircle size={14} /> Cerrar</button></div>
             )}
           </div>
-          {!previewDoc?.archivo ? (
-            <div className="previewEmpty">
-              <FileText size={48} />
-              <b>Selecciona un documento</b>
-              <span>Aquí podrás revisarlo cómodamente sin salir del portal.</span>
-            </div>
-          ) : previewDoc.archivo.tipo.startsWith("image/") ? (
-            <img className="inlineDocumentPreview" src={previewDoc.archivo.dataUrl} alt={previewDoc.archivo.nombre} />
+          {previewDoc.archivo.tipo.startsWith("image/") ? (
+            <img className="inlineDocumentPreview" src={previewUrl} alt={previewDoc.archivo.nombre} />
           ) : previewDoc.archivo.tipo === "application/pdf" || previewDoc.archivo.nombre.toLowerCase().endsWith(".pdf") ? (
-            <iframe className="inlineDocumentPreview" src={previewDoc.archivo.dataUrl} title={previewDoc.archivo.nombre} />
+            <iframe className="inlineDocumentPreview" src={previewUrl} title={previewDoc.archivo.nombre} />
           ) : (
             <div className="previewEmpty">
               <FileText size={52} />
@@ -1549,6 +1557,7 @@ function Cargue({ db, setDb, session }: any) {
             </div>
           )}
         </aside>
+        </div>}
       </div>
     </div>
   );
@@ -1556,6 +1565,9 @@ function Cargue({ db, setDb, session }: any) {
 function Revision({ db, save }: any) {
   const [selectedUserId, setSelectedUserId] = useState("");
   const [selectedDocId, setSelectedDocId] = useState("");
+  const [reviewPreviewUrl, setReviewPreviewUrl] = useState("");
+  const [aiReport, setAiReport] = useState<any>(null);
+  const [aiLoading, setAiLoading] = useState(false);
   const [f, setF] = useState({
     entidadId: "",
     areaId: "",
@@ -1583,6 +1595,20 @@ function Revision({ db, save }: any) {
       )
     : [];
   const selectedDoc = selectedDocs.find((d) => d.id === selectedDocId);
+  useEffect(() => () => { if (reviewPreviewUrl.startsWith("blob:")) URL.revokeObjectURL(reviewPreviewUrl); }, [reviewPreviewUrl]);
+  const selectReviewDocument = async (doc: Documento) => {
+    setSelectedDocId(doc.id);
+    if (reviewPreviewUrl.startsWith("blob:")) URL.revokeObjectURL(reviewPreviewUrl);
+    setReviewPreviewUrl("");
+    if (!doc.archivo) return;
+    try {
+      const response = await fetch(doc.archivo.dataUrl, { cache: "no-store" });
+      if (!response.ok) throw new Error("El archivo no se encuentra en el almacenamiento. Solicite al afiliado cargarlo nuevamente.");
+      setReviewPreviewUrl(URL.createObjectURL(await response.blob()));
+    } catch (error: any) {
+      alert(error.message);
+    }
+  };
   const cambiar = (uidDoc: string, docId: string, estado: EstadoDoc) => {
     const obs = prompt(`Observación para estado ${estado}`, "") || "";
     const lista = (db.documentos[uidDoc] || []).map((d: Documento) =>
@@ -1598,6 +1624,18 @@ function Revision({ db, save }: any) {
       { ...db, documentos: { ...db.documentos, [uidDoc]: lista } },
       `Revisión documental: ${usuarioNombre(db, uidDoc)} · ${estado}`,
     );
+  };
+  const analizarConIA = async () => {
+    if (!selectedUser) return;
+    setAiLoading(true);
+    setAiReport(null);
+    try {
+      setAiReport(await reviewAffiliateDocuments(selectedUser.id));
+    } catch (error: any) {
+      setAiReport({ error: error.message });
+    } finally {
+      setAiLoading(false);
+    }
   };
   return (
     <div className="card">
@@ -1684,10 +1722,12 @@ function Revision({ db, save }: any) {
               <div className="selectedAffiliateHeader">
                 <div><span className="welcomeTag">Afiliado partícipe</span><h3>{selectedUser.nombre}</h3><p>{entidadNombre(db, selectedUser.entidadId)} · {areaNombre(db, selectedUser.areaId)} · {selectedUser.tipo}</p></div>
                 <span className="badge">Líder: {usuarioNombre(db, selectedUser.liderId)}</span>
+                <button className="btn aiReviewButton" disabled={aiLoading} onClick={analizarConIA}><Bot size={16} /> {aiLoading ? "Analizando soportes…" : "Generar informe con IA"}</button>
               </div>
+              {aiReport && <div className={`aiDocumentReport ${aiReport.error ? "error" : ""}`}><b>{aiReport.error ? "No fue posible generar el informe" : `Informe IA · ${aiReport.attached} archivo(s) analizado(s)`}</b><div>{aiReport.error || aiReport.report}</div>{!aiReport.error && <small>Apoyo automatizado. La validación y decisión final corresponde al responsable humano.</small>}</div>}
               <div className="reviewDocumentList">
                 {selectedDocs.map((d) => (
-                  <button key={d.id} className={`reviewDocumentButton ${d.id === selectedDocId ? "active" : ""}`} onClick={() => setSelectedDocId(d.id)}>
+                  <button key={d.id} className={`reviewDocumentButton ${d.id === selectedDocId ? "active" : ""}`} onClick={() => selectReviewDocument(d)}>
                     <FileText size={18} />
                     <span><b>{d.nombre}</b><small>{d.archivo ? `${d.archivo.nombre} · ${bytes(d.archivo.tamano)}` : "Pendiente por cargar"}</small></span>
                     <i className={`pill ${d.estado === "Aprobado" ? "ok" : d.estado === "Rechazado" ? "bad" : d.estado === "Devuelto" ? "obs" : d.estado === "Cargado" ? "rev" : "pend"}`}>{d.estado}</i>
@@ -1699,10 +1739,10 @@ function Revision({ db, save }: any) {
           ) : <div className="previewEmpty"><Users size={52} /><b>Seleccione un afiliado</b><span>Al hacer clic en su nombre aparecerán aquí todos sus documentos.</span></div>}
         </section>
         <aside className="reviewViewer">
-          {selectedDoc?.archivo ? (
+          {selectedDoc?.archivo && reviewPreviewUrl ? (
             <>
               <div className="previewHeading"><div><span className="welcomeTag">Documento seleccionado</span><h3>{selectedDoc.nombre}</h3></div><a className="btn ghost" href={selectedDoc.archivo.dataUrl} target="_blank" rel="noreferrer"><Eye size={14} /> Abrir</a></div>
-              {selectedDoc.archivo.tipo.startsWith("image/") ? <img className="reviewPreviewFrame" src={selectedDoc.archivo.dataUrl} alt={selectedDoc.archivo.nombre} /> : selectedDoc.archivo.tipo === "application/pdf" || selectedDoc.archivo.nombre.toLowerCase().endsWith(".pdf") ? <iframe className="reviewPreviewFrame" src={selectedDoc.archivo.dataUrl} title={selectedDoc.archivo.nombre} /> : <div className="previewEmpty"><FileText size={52} /><b>{selectedDoc.archivo.nombre}</b><span>Abra el archivo para revisarlo en su visor compatible.</span></div>}
+              {selectedDoc.archivo.tipo.startsWith("image/") ? <img className="reviewPreviewFrame" src={reviewPreviewUrl} alt={selectedDoc.archivo.nombre} /> : selectedDoc.archivo.tipo === "application/pdf" || selectedDoc.archivo.nombre.toLowerCase().endsWith(".pdf") ? <iframe className="reviewPreviewFrame" src={reviewPreviewUrl} title={selectedDoc.archivo.nombre} /> : <div className="previewEmpty"><FileText size={52} /><b>{selectedDoc.archivo.nombre}</b><span>Abra el archivo para revisarlo en su visor compatible.</span></div>}
               <p className="obsBox">{selectedDoc.observacion}</p>
               <div className="reviewActions"><button className="btn" onClick={() => cambiar(selectedUser!.id, selectedDoc.id, "Aprobado")}><CheckCircle2 size={15} /> Aprobar</button><button className="btn danger" onClick={() => cambiar(selectedUser!.id, selectedDoc.id, "Rechazado")}><XCircle size={15} /> Rechazar</button><button className="btn obsBtn" onClick={() => cambiar(selectedUser!.id, selectedDoc.id, "Devuelto")}>Devolver</button></div>
             </>

@@ -61,6 +61,9 @@ export async function deleteDocument(documentId: string) {
   return payload;
 }
 
+export const reviewAffiliateDocuments = (userId: string) =>
+  postJson("/api/agreserge-documents/review", { userId });
+
 export async function saveOwnProfile(profile: unknown, user: unknown) {
   const response = await fetch("/api/agreserge-profile", {
     method: "PUT",

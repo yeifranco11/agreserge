@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, Save, Search, Trash2, UserRound } from "lucide-react";
+import { Plus, Printer, Save, Search, Trash2, UserRound } from "lucide-react";
 import { useMemo, useState } from "react";
 import { saveOwnProfile } from "../../lib/agreserge-client";
 
@@ -297,6 +297,16 @@ export function TechnicalProfiles({
     key in profile || required.includes(key)
       ? update(key, value)
       : updateExtra(key, value);
+  const imprimirFicha = () => {
+    const popup = window.open("", "_blank", "width=1000,height=900");
+    if (!popup) return alert("Permite ventanas emergentes para imprimir la ficha.");
+    const esc = (value: any) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[character] || character);
+    const fields = [...personal, ...work, ...home, ...health];
+    const rows = fields.map(([key, label]) => `<div class="field"><span>${esc(label)}</span><b>${esc(val(key)) || "Sin registrar"}</b></div>`).join("");
+    const familyRows = family.length ? family.map((person: any) => `<tr><td>${esc(person.nombre)}</td><td>${esc(person.edad)}</td><td>${esc(person.parentesco)}</td><td>${esc(person.escolaridad)}</td><td>${esc(person.ocupacion)}</td></tr>`).join("") : `<tr><td colspan="5">Sin integrantes registrados</td></tr>`;
+    popup.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Ficha ${esc(userDraft.nombre)}</title><style>@page{size:A4;margin:11mm}*{box-sizing:border-box}body{font:11px Arial;color:#11213a;margin:0}.top{height:8px;background:linear-gradient(90deg,#07539a,#17a0df,#d39b18)}header{display:grid;grid-template-columns:72px 1fr auto;gap:14px;align-items:center;padding:18px;border:1px solid #cad8e6;border-top:0}header img{width:65px;height:65px;object-fit:contain}h1{font-size:16px;margin:0 0 5px}.tag{background:#e8f3ff;color:#07539a;border-radius:12px;padding:10px;font-weight:800;text-align:center}.identity{background:#07539a;color:white;padding:15px 18px;margin:14px 0;border-radius:13px}.identity h2{margin:0 0 5px;font-size:20px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.field{border:1px solid #d7e3ee;border-radius:9px;padding:8px;min-height:48px}.field span{display:block;color:#60758c;font-size:8px;text-transform:uppercase;font-weight:800;margin-bottom:5px}.section{margin:15px 0 7px;background:#dcecff;border-left:5px solid #07539a;padding:8px;font-weight:900;text-transform:uppercase}table{width:100%;border-collapse:collapse}th,td{border:1px solid #cad8e6;padding:7px;text-align:left}th{background:#eff6ff}.footer{margin-top:26px;border-top:1px solid #8396aa;padding-top:8px;display:flex;justify-content:space-between;color:#60758c}@media print{.top{-webkit-print-color-adjust:exact;print-color-adjust:exact}.identity,.section{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body><div class="top"></div><header><img src="${location.origin}/logo.png"><div><h1>ASOCIACIÓN GREMIAL SINDICAL DE PRESTACIONES DE SERVICIOS GENERALES Y DE SALUD DEL VALLE</h1><b>NIT 901.432.027-0</b></div><div class="tag">AD-FO-65 · VERSIÓN 01<br>PERFIL SOCIODEMOGRÁFICO</div></header><section class="identity"><h2>${esc(userDraft.nombre)}</h2><span>Afiliado partícipe · Documento ${esc(val("documento"))}</span></section><div class="section">Información sociodemográfica</div><div class="grid">${rows}</div><div class="section">Composición familiar</div><table><thead><tr><th>Nombre</th><th>Edad</th><th>Parentesco</th><th>Escolaridad</th><th>Ocupación</th></tr></thead><tbody>${familyRows}</tbody></table><div class="footer"><span>Generado desde el Portal Institucional AGRESERGE</span><span>${new Date().toLocaleString("es-CO")}</span></div><script>window.onload=()=>setTimeout(()=>window.print(),300)</script></body></html>`);
+    popup.document.close();
+  };
   return (
     <div className="grid socioProfile">
       {canBrowse && (
@@ -802,6 +812,9 @@ export function TechnicalProfiles({
         <div className="socioActions">
           <button className="btn primary" onClick={guardar}>
             <Save size={16} /> Guardar ficha
+          </button>
+          <button className="btn" onClick={imprimirFicha}>
+            <Printer size={16} /> Imprimir / guardar PDF
           </button>
           <button
             className="btn"

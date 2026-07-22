@@ -403,6 +403,47 @@ textarea:focus {
   align-items: start;
   margin-top: 14px;
 }
+.affiliateUploadWorkspace {
+  display: block;
+  max-width: 1050px;
+  margin-inline: auto;
+}
+.affiliateUploadWorkspace .documentList {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.affiliateUploadWorkspace .docItem {
+  margin: 0;
+  padding: 16px;
+  border-radius: 20px;
+  box-shadow: 0 8px 24px rgba(20, 65, 108, 0.06);
+}
+.affiliateUploadWorkspace input[type="file"] {
+  padding: 8px;
+  background: #f6faff;
+}
+.affiliateUploadWorkspace input[type="file"]::file-selector-button {
+  border: 0;
+  border-radius: 12px;
+  padding: 10px 13px;
+  margin-right: 10px;
+  background: #e3f0ff;
+  color: #0b4ea2;
+  font-weight: 800;
+  cursor: pointer;
+}
+.affiliatePreviewModal {
+  position: relative;
+  top: auto;
+  width: min(980px, 95vw);
+  min-height: auto;
+  max-height: 92vh;
+  overflow: auto;
+}
+.affiliatePreviewModal .inlineDocumentPreview {
+  height: 72vh;
+}
 .documentList {
   min-width: 0;
 }
@@ -537,6 +578,9 @@ textarea:focus {
     grid-template-columns: 1fr;
   }
   .documentWorkspace .docItem {
+    grid-template-columns: 1fr;
+  }
+  .affiliateUploadWorkspace .documentList {
     grid-template-columns: 1fr;
   }
   .documentPreview {
@@ -773,6 +817,35 @@ textarea:focus {
   padding: 16px;
   border-bottom: 1px solid #e2ebf4;
   background: linear-gradient(135deg, #f7fbff, #edf6ff);
+}
+.aiReviewButton {
+  margin-top: 10px;
+  background: linear-gradient(135deg, #6d28d9, #0f76d1);
+  color: #fff;
+}
+.aiDocumentReport {
+  margin: 12px;
+  padding: 14px;
+  border: 1px solid #c4b5fd;
+  border-radius: 15px;
+  background: #f5f3ff;
+  color: #3b2774;
+}
+.aiDocumentReport > div {
+  margin: 9px 0;
+  white-space: pre-wrap;
+  line-height: 1.5;
+  font-size: 12px;
+}
+.aiDocumentReport small {
+  display: block;
+  border-top: 1px solid #ddd6fe;
+  padding-top: 8px;
+}
+.aiDocumentReport.error {
+  border-color: #fecaca;
+  background: #fff1f2;
+  color: #991b1b;
 }
 .selectedAffiliateHeader h3 {
   margin: 7px 0 3px;
