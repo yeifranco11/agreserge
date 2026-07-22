@@ -27,6 +27,13 @@ const cop = (value: number) =>
     currency: "COP",
     maximumFractionDigits: 0,
   }).format(value || 0);
+const safe = (value: unknown) =>
+  String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 
 export function NominaComprobantes({ session }: any) {
   const [documento, setDocumento] = useState("");
@@ -132,30 +139,11 @@ export function NominaComprobantes({ session }: any) {
       payroll.bienestar +
       payroll.retencion +
       payroll.otrosDescuentos;
-    windowRef.document.write(
-      `<!doctype html><html><head><title>Comprobante ${payroll.documento}</title><style>body{font-family:Arial;margin:35px;color:#14213d}.head{display:flex;justify-content:space-between;border-bottom:4px solid #1261a0;padding-bottom:18px}.brand{font-size:25px;font-weight:800}.tag{color:#1261a0;text-transform:uppercase;font-weight:700}.box{border:1px solid #dbe4ee;border-radius:14px;padding:18px;margin-top:18px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.cols{display:grid;grid-template-columns:1fr 1fr;gap:18px}.row{display:flex;justify-content:space-between;padding:8px;border-bottom:1px solid #edf2f7}.total{background:#eaf4ff;font-size:20px;font-weight:800}.sig{margin-top:55px;display:grid;grid-template-columns:1fr 1fr;gap:60px}.line{border-top:1px solid #111;padding-top:8px;text-align:center}@media print{button{display:none}}</style></head><body><div class="head"><div><div class="tag">Portal institucional</div><div class="brand">AGRESERGE</div></div><div><b>COMPROBANTE DE COMPENSACIÓN</b><br>${new Date().toLocaleDateString("es-CO")}</div></div><div class="box grid"><div><b>Afiliado partícipe</b><br>${payroll.nombre}</div><div><b>Documento</b><br>${payroll.documento}</div><div><b>Cargo / proceso</b><br>${payroll.cargo}</div><div><b>Área</b><br>${payroll.area}</div><div><b>Días compensados</b><br>${payroll.dias}</div><div><b>Fuente</b><br>${payroll.tab}</div></div><div class="box cols"><div><h3>Compensaciones</h3><div class="row"><span>Ordinaria</span><b>${cop(payroll.ordinaria)}</b></div><div class="row"><span>Otras compensaciones</span><b>${cop(payroll.otras)}</b></div><div class="row"><span>Transporte</span><b>${cop(payroll.transporte)}</b></div><div class="row"><span>Tiempo adicional / triage</span><b>${cop(payroll.adicionales)}</b></div><div class="row"><span>Total compensado</span><b>${cop(payroll.ordinaria + payroll.otras)}</b></div></div><div><h3>Aportes y deducciones</h3><div class="row"><span>Salud / EPS</span><b>${cop(payroll.salud)}</b></div><div class="row"><span>Pensión</span><b>${cop(payroll.pension)}</b></div><div class="row"><span>ARL</span><b>${cop(payroll.arl)}</b></div><div class="row"><span>Parafiscales / COMFANDI</span><b>${cop(payroll.parafiscales)}</b></div><div class="row"><span>Bienestar social</span><b>${cop(payroll.bienestar)}</b></div><div class="row"><span>Retefuente</span><b>${cop(payroll.retencion)}</b></div><div class="row"><span>Otros descuentos</span><b>${cop(payroll.otrosDescuentos)}</b></div></div></div><div class="box row total"><span>Total a pagar / valor recibido del mes</span><b>${cop(payroll.totalRecibido)}</b></div><div class="sig"><div class="line">Coordinación administrativa</div><div class="line">Firma digital afiliado partícipe</div></div><p style="margin-top:35px;font-size:11px;color:#5b6777">Generado electrónicamente desde el Portal AGRESERGE. Fuente: FORMATO NÓMINA HGC. Aportes y deducciones registrados: ${cop(deductions)}. Costo del proceso: ${cop(payroll.costoProceso)}.</p><script>window.onload=()=>window.print()</script></body></html>`,
-    );
-    windowRef.document.body.innerHTML = windowRef.document.body.innerHTML
-      .replace("Cargo / proceso", "PROCESO")
-      .replace("<b>Área</b>", "<b>ÁREA O SERVICIO</b>")
-      .replace("Otras compensaciones", "Compensación por descanso")
-      .replace(
-        "<span>Transporte</span>",
-        "<span>Compensación por transporte</span>",
-      )
-      .replace(
-        "Tiempo adicional / triage",
-        "Compensación por tiempo adicional",
-      );
-    const brand = windowRef.document.querySelector(".head > div");
-    if (brand) {
-      const logo = windowRef.document.createElement("img");
-      logo.src = `${location.origin}/logo.png`;
-      logo.alt = "Logo AGRESERGE";
-      logo.style.cssText =
-        "width:72px;height:72px;object-fit:contain;float:left;margin-right:14px";
-      brand.prepend(logo);
-    }
+    const item = (label: string, value: number, strong = false) =>
+      `<div class="item${strong ? " strong" : ""}"><span>${label}</span><b>${cop(value)}</b></div>`;
+    windowRef.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Comprobante ${safe(payroll.documento)}</title><style>
+      @page{size:A4;margin:12mm}*{box-sizing:border-box}body{margin:0;background:#eef5fb;color:#0d1b35;font:13px Arial,sans-serif}.sheet{max-width:850px;margin:auto;background:#fff;border-radius:22px;overflow:hidden;box-shadow:0 18px 50px #173b6520}.top{height:10px;background:linear-gradient(90deg,#074d8d,#119be1,#d29a12)}header{padding:24px 28px;display:grid;grid-template-columns:82px 1fr auto;gap:16px;align-items:center;border-bottom:1px solid #dce7f2}header img{width:74px;height:74px;object-fit:contain}.org{font-size:11px;letter-spacing:.12em;color:#55708e;font-weight:700}.brand{font-size:25px;font-weight:900;color:#073765;margin:4px 0}.docTitle{text-align:right;background:#e9f3ff;color:#07549b;padding:13px 16px;border-radius:14px;font-weight:900;letter-spacing:.06em}.period{text-align:right;margin-top:7px;font-weight:700}.identity{margin:20px 28px;display:grid;grid-template-columns:2fr 1fr 1fr;gap:1px;background:#cddceb;border:1px solid #cddceb;border-radius:14px;overflow:hidden}.field{background:#fff;padding:13px 15px;min-height:62px}.field.wide{grid-column:span 2}.field label{display:block;font-size:10px;color:#647b94;font-weight:800;letter-spacing:.08em;margin-bottom:6px}.field div{font-size:14px;font-weight:800}.columns{margin:0 28px;display:grid;grid-template-columns:1fr 1fr;gap:16px}.panel{border:1px solid #d7e4f0;border-radius:16px;overflow:hidden}.panel h3{margin:0;padding:13px 16px;background:#0b5ca8;color:#fff;font-size:14px;letter-spacing:.04em}.item{display:flex;justify-content:space-between;gap:16px;padding:10px 14px;border-bottom:1px solid #edf2f7}.item:last-child{border:0}.item span{font-size:11px;font-weight:700}.item b{white-space:nowrap}.item.strong{background:#eff7ff;color:#074c8d}.grand{margin:20px 28px;background:linear-gradient(105deg,#074e96,#158fdb);color:white;border-radius:16px;padding:17px 20px;display:flex;align-items:center;justify-content:space-between;font-size:18px;font-weight:900}.grand b{font-size:25px}.signatures{margin:52px 28px 20px;display:grid;grid-template-columns:1fr 1fr;gap:70px}.signature{border-top:1px solid #17334f;text-align:center;padding-top:8px;font-size:11px;font-weight:700}.footer{margin:0 28px 24px;padding-top:12px;border-top:1px dashed #b8c9da;color:#6b7f94;font-size:9px;display:flex;justify-content:space-between}.seal{color:#0870bd;font-weight:800}@media print{body{background:white}.sheet{box-shadow:none;border-radius:0}.top{-webkit-print-color-adjust:exact;print-color-adjust:exact}.panel h3,.grand{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+    </style></head><body><main class="sheet"><div class="top"></div><header><img src="${location.origin}/logo.png" alt="Logo AGRESERGE"><div><div class="org">ASOCIACIÓN GREMIAL SINDICAL DE PRESTACIONES DE SERVICIOS GENERALES Y DE SALUD DEL VALLE</div><div class="brand">AGRESERGE</div><div>NIT 901.432.027-0</div></div><div><div class="docTitle">COMPROBANTE DE COMPENSACIÓN</div><div class="period">PERIODO: ${safe(period.mes).toUpperCase()} ${safe(period.anio)}</div></div></header><section class="identity"><div class="field wide"><label>AFILIADO PARTÍCIPE</label><div>${safe(payroll.nombre)}</div></div><div class="field"><label>IDENTIFICACIÓN</label><div>${safe(payroll.documento)}</div></div><div class="field"><label>PROCESO</label><div>${safe(payroll.cargo)}</div></div><div class="field"><label>ÁREA O SERVICIO</label><div>${safe(payroll.area)}</div></div><div class="field"><label>DÍAS COMPENSADOS</label><div>${safe(payroll.dias)}</div></div></section><section class="columns"><div class="panel"><h3>COMPENSACIONES</h3>${item("COMPENSACIÓN ORDINARIA", payroll.ordinaria)}${item("OTRAS COMPENSACIONES", payroll.otras)}${item("TOTAL COMPENSADO", payroll.ordinaria + payroll.otras, true)}${item("COMPENSACIÓN POR TRANSPORTE", payroll.transporte)}${item("COMPENSACIÓN POR TIEMPO ADICIONAL", payroll.adicionales)}${item("COMPENSACIÓN POR DESCANSO", payroll.descanso || 0)}</div><div class="panel"><h3>APORTES Y DEDUCCIONES</h3>${item("EPS", payroll.salud)}${item("PENSIONES", payroll.pension)}${item("ARL", payroll.arl)}${item("COMFANDI", payroll.parafiscales)}${item("BIENESTAR SOCIAL", payroll.bienestar)}${item("RETEFUENTE", payroll.retencion)}${item("DEDUCCIONES ADICIONALES", payroll.otrosDescuentos)}${item("TOTAL DEDUCCIONES", deductions, true)}</div></section><div class="grand"><span>TOTAL A PAGAR</span><b>${cop(payroll.totalRecibido)}</b></div><section class="signatures"><div class="signature">ELABORÓ<br>Coordinación administrativa</div><div class="signature">FIRMA Y CÉDULA AFILIADO PARTÍCIPE</div></section><footer class="footer"><span>Generado electrónicamente desde el Portal Institucional AGRESERGE.</span><span class="seal">Documento verificable · ${safe(payroll.tab)}</span></footer></main><script>window.onload=()=>setTimeout(()=>window.print(),350)</script></body></html>`);
     windowRef.document.close();
   };
   const generarInforme = async () => {

@@ -1,9 +1,7 @@
 import { hashPassword } from './agreserge-auth';
 import { canAdmin } from './agreserge-permissions';
 import { requireSupabaseAdmin } from './supabase-admin';
-
-const docsAdministrativo = ['Cédula de ciudadanía al 150%','Foto fondo blanco para carnet','Hoja de vida función pública','Diplomas y actas de grado','RUT actualizado','Antecedentes judiciales','Antecedentes fiscales','Antecedentes disciplinarios','Medidas correctivas','REDAM','Certificaciones laborales','Tratamiento de datos personales','Confidencialidad','Certificación bancaria','Certificación EPS','Fondo de pensiones','ARL','Caja de compensación','Examen médico laboral','Contrato o vinculación administrativa'];
-const docsAsistencial = ['Cédula de ciudadanía al 150%','Foto fondo blanco para carnet','Hoja de vida función pública','Diplomas y actas de grado','Tarjeta profesional','RETHUS actualizado','Póliza de responsabilidad civil','Cursos obligatorios asistenciales','Carnet de vacunas','RUT actualizado','Antecedentes judiciales','Antecedentes fiscales','Antecedentes disciplinarios','Medidas correctivas','REDAM','Certificación bancaria','Certificación EPS','Fondo de pensiones','ARL','Caja de compensación','Examen médico laboral','Contrato o vinculación asistencial'];
+import { documentRequirements } from './document-requirements';
 
 export const defaultPermissions: Record<string, string[]> = {
   'Agremiado':['Ficha técnica','Cargue documental','Nómina y comprobantes','Solicitudes y firmas','Trámites administrativos','AGREBOT'],
@@ -50,7 +48,7 @@ const requiredOperationalModules: Record<string, string[]> = {
 };
 
 function supportDocs(tipo = 'Asistencial', agremiadoId = '') {
-  return (tipo === 'Administrativo' ? docsAdministrativo : docsAsistencial).map((nombre, index) => ({
+  return documentRequirements(tipo).map((nombre, index) => ({
     id: `${agremiadoId || 'doc'}-${index}`,
     nombre,
     categoria: tipo,

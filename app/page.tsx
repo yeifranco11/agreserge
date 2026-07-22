@@ -41,6 +41,10 @@ import {
 import { driveTemplate } from "../lib/drive-templates";
 import { NominaComprobantes, SolicitudesFirmas } from "./components/operations";
 import {
+  documentRequirements,
+  healthcareCourseDetails,
+} from "../lib/document-requirements";
+import {
   isSocioProfileComplete,
   TechnicalProfiles,
 } from "./components/technical-profiles";
@@ -278,54 +282,8 @@ const anexos = [
   [26, "Informe de costos del personal", "Administrativo"],
   [27, "Informe PAMEC", "Asistencial"],
 ] as const;
-const docsAdministrativo = [
-  "Cédula de ciudadanía al 150%",
-  "Foto fondo blanco para carnet",
-  "Hoja de vida función pública",
-  "Diplomas y actas de grado",
-  "RUT actualizado",
-  "Antecedentes judiciales",
-  "Antecedentes fiscales",
-  "Antecedentes disciplinarios",
-  "Medidas correctivas",
-  "REDAM",
-  "Certificaciones laborales",
-  "Tratamiento de datos personales",
-  "Confidencialidad",
-  "Certificación bancaria",
-  "Certificación EPS",
-  "Fondo de pensiones",
-  "ARL",
-  "Caja de compensación",
-  "Examen médico laboral",
-  "Contrato o vinculación administrativa",
-];
-const docsAsistencial = [
-  "Cédula de ciudadanía al 150%",
-  "Foto fondo blanco para carnet",
-  "Hoja de vida función pública",
-  "Diplomas y actas de grado",
-  "Tarjeta profesional",
-  "RETHUS actualizado",
-  "Póliza de responsabilidad civil",
-  "Cursos obligatorios asistenciales",
-  "Carnet de vacunas",
-  "RUT actualizado",
-  "Antecedentes judiciales",
-  "Antecedentes fiscales",
-  "Antecedentes disciplinarios",
-  "Medidas correctivas",
-  "REDAM",
-  "Certificación bancaria",
-  "Certificación EPS",
-  "Fondo de pensiones",
-  "ARL",
-  "Caja de compensación",
-  "Examen médico laboral",
-  "Contrato o vinculación asistencial",
-];
 const listaSoportes = (tipo?: TipoPersonal) =>
-  tipo === "Administrativo" ? docsAdministrativo : docsAsistencial;
+  documentRequirements(tipo);
 const soportes = (tipo?: TipoPersonal, agremiadoId = "") =>
   listaSoportes(tipo).map((nombre) => ({
     id: uid(),
@@ -1422,7 +1380,19 @@ function Ficha({ db, save, session, setSession }: any) {
   );
 }
 function Cargue({ db, setDb, session }: any) {
-  const docs = db.documentos[session.id] || soportes(session.tipo, session.id);
+  const storedDocs: Documento[] = db.documentos[session.id] || [];
+  const officialDocs = soportes(session.tipo, session.id);
+  const docs = [
+    ...officialDocs.map(
+      (required) =>
+        storedDocs.find((saved) => saved.nombre === required.nombre) || required,
+    ),
+    ...storedDocs.filter(
+      (saved) =>
+        saved.archivo &&
+        !officialDocs.some((required) => required.nombre === saved.nombre),
+    ),
+  ];
   const [uploading, setUploading] = useState("");
   const syncDb = (payload: any) => {
     if (payload.db) {
@@ -1495,6 +1465,16 @@ function Cargue({ db, setDb, session }: any) {
         <div className="docItem" key={d.id || d.nombre}>
           <div>
             <b>{d.nombre}</b>
+            {d.nombre.startsWith("Cursos y soportes") && (
+              <details className="mini" style={{ marginTop: 8 }}>
+                <summary>Ver cursos exigidos según área o servicio</summary>
+                <ul>
+                  {healthcareCourseDetails.map((course) => (
+                    <li key={course}>{course}</li>
+                  ))}
+                </ul>
+              </details>
+            )}
             <br />
             <span className="mini">
               {d.archivo
