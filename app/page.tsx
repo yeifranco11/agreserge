@@ -1382,7 +1382,7 @@ function Ficha({ db, save, session, setSession }: any) {
 function Cargue({ db, setDb, session }: any) {
   const storedDocs: Documento[] = db.documentos[session.id] || [];
   const officialDocs = soportes(session.tipo, session.id);
-  const docs = [
+  const docs: Documento[] = [
     ...officialDocs.map(
       (required) =>
         storedDocs.find((saved) => saved.nombre === required.nombre) || required,
@@ -1394,6 +1394,8 @@ function Cargue({ db, setDb, session }: any) {
     ),
   ];
   const [uploading, setUploading] = useState("");
+  const [previewId, setPreviewId] = useState("");
+  const previewDoc = docs.find((doc) => doc.id === previewId && doc.archivo);
   const syncDb = (payload: any) => {
     if (payload.db) {
       setDb(payload.db);
@@ -1461,8 +1463,10 @@ function Cargue({ db, setDb, session }: any) {
       <p>
         <b>{pct}%</b> de requisitos documentales completos
       </p>
+      <div className="documentWorkspace">
+        <div className="documentList">
       {docs.map((d: Documento) => (
-        <div className="docItem" key={d.id || d.nombre}>
+        <div className={`docItem ${previewId === d.id ? "selected" : ""}`} key={d.id || d.nombre}>
           <div>
             <b>{d.nombre}</b>
             {d.nombre.startsWith("Cursos y soportes") && (
@@ -1502,14 +1506,9 @@ function Cargue({ db, setDb, session }: any) {
             )}
             {d.archivo && (
               <>
-                <a
-                  className="btn"
-                  href={d.archivo.dataUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                >
+                <button className="btn" onClick={() => setPreviewId(d.id)}>
                   <Eye size={14} /> Previsualizar
-                </a>
+                </button>
                 <button className="btn danger" onClick={() => eliminar(d)}>
                   <XCircle size={14} /> Eliminar
                 </button>
@@ -1518,6 +1517,39 @@ function Cargue({ db, setDb, session }: any) {
           </div>
         </div>
       ))}
+        </div>
+        <aside className="documentPreview">
+          <div className="previewHeading">
+            <div>
+              <span className="welcomeTag">Vista rápida</span>
+              <h3>{previewDoc?.nombre || "Previsualizador"}</h3>
+            </div>
+            {previewDoc?.archivo && (
+              <a className="btn ghost" href={previewDoc.archivo.dataUrl} target="_blank" rel="noreferrer">
+                <Eye size={14} /> Abrir completo
+              </a>
+            )}
+          </div>
+          {!previewDoc?.archivo ? (
+            <div className="previewEmpty">
+              <FileText size={48} />
+              <b>Selecciona un documento</b>
+              <span>Aquí podrás revisarlo cómodamente sin salir del portal.</span>
+            </div>
+          ) : previewDoc.archivo.tipo.startsWith("image/") ? (
+            <img className="inlineDocumentPreview" src={previewDoc.archivo.dataUrl} alt={previewDoc.archivo.nombre} />
+          ) : previewDoc.archivo.tipo === "application/pdf" || previewDoc.archivo.nombre.toLowerCase().endsWith(".pdf") ? (
+            <iframe className="inlineDocumentPreview" src={previewDoc.archivo.dataUrl} title={previewDoc.archivo.nombre} />
+          ) : (
+            <div className="previewEmpty">
+              <FileText size={52} />
+              <b>{previewDoc.archivo.nombre}</b>
+              <span>Este archivo de Word o Excel se abre en su visor completo.</span>
+              <a className="btn primary" href={previewDoc.archivo.dataUrl} target="_blank" rel="noreferrer">Abrir documento</a>
+            </div>
+          )}
+        </aside>
+      </div>
     </div>
   );
 }
