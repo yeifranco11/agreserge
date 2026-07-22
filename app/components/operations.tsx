@@ -65,6 +65,9 @@ export function NominaComprobantes({ session }: any) {
     sheetUrl: SHEET_URL,
   });
   const isAffiliate = session.rol === "Agremiado";
+  const payrollDeductions = payroll
+    ? payroll.salud + payroll.pension + payroll.arl + payroll.parafiscales + payroll.bienestar + payroll.retencion + payroll.otrosDescuentos
+    : 0;
   const canManage = [
     "Administrador de Sistemas",
     "Coordinadora",
@@ -441,78 +444,63 @@ export function NominaComprobantes({ session }: any) {
           </div>
         ) : (
           <div className="payrollSlip">
-            <div className="row between">
-              <div className="row">
-                <img
-                  src="/logo.png"
-                  alt="AGRESERGE"
-                  style={{ width: 72, height: 72, objectFit: "contain" }}
-                />
-                <div>
-                  <span className="welcomeTag">
-                    Comprobante de compensación
-                  </span>
-                  <h2>{payroll.nombre}</h2>
-                  <p>
-                    {payroll.documento} · PROCESO: {payroll.cargo} · ÁREA O
-                    SERVICIO: {payroll.area}
-                  </p>
-                </div>
-              </div>
+            <div className="payrollScreenTop" />
+            <header className="payrollScreenHeader">
+              <img src="/logo.png" alt="AGRESERGE" />
+              <div><small>ASOCIACIÓN GREMIAL SINDICAL DE PRESTACIONES DE SERVICIOS GENERALES Y DE SALUD DEL VALLE</small><h2>AGRESERGE</h2><b>NIT 901.432.027-0</b></div>
+              <div className="payrollScreenTitle"><strong>COMPROBANTE DE COMPENSACIÓN</strong><span>PERIODO: {String(period.mes).toUpperCase()} {period.anio}</span></div>
+            </header>
+            <div className="payrollScreenIdentity">
+              <div className="wide"><span>AFILIADO PARTÍCIPE</span><b>{payroll.nombre}</b></div>
+              <div><span>IDENTIFICACIÓN</span><b>{payroll.documento}</b></div>
+              <div><span>PROCESO</span><b>{payroll.cargo}</b></div>
+              <div><span>ÁREA O SERVICIO</span><b>{payroll.area}</b></div>
+              <div><span>DÍAS COMPENSADOS</span><b>{payroll.dias}</b></div>
+            </div>
+            <div className="payrollScreenToolbar">
               <button className="btn primary" onClick={imprimir}>
                 <Download size={15} /> Generar PDF / imprimir
               </button>
             </div>
             <div className="payrollColumns">
               <div>
-                <h4>Compensaciones</h4>
+                <h4>COMPENSACIONES</h4>
                 <Money
-                  label="Compensación ordinaria"
+                  label="COMPENSACIÓN ORDINARIA"
                   value={payroll.ordinaria}
                 />
                 <Money
-                  label="Compensación por descanso"
+                  label="OTRAS COMPENSACIONES"
                   value={payroll.otras}
                 />
+                <Money label="TOTAL COMPENSADO" value={payroll.ordinaria + payroll.otras} strong />
                 <Money
-                  label="Compensación por transporte"
+                  label="COMPENSACIÓN POR TRANSPORTE"
                   value={payroll.transporte}
                 />
                 <Money
-                  label="Compensación por tiempo adicional"
+                  label="COMPENSACIÓN POR TIEMPO ADICIONAL"
                   value={payroll.adicionales}
                 />
-                <Money
-                  label="Total compensado"
-                  value={payroll.ordinaria + payroll.otras}
-                />
+                <Money label="COMPENSACIÓN POR DESCANSO" value={payroll.descanso || 0} />
               </div>
               <div>
-                <h4>Aportes y deducciones</h4>
-                <Money label="Salud / EPS" value={payroll.salud} />
-                <Money label="Pensión" value={payroll.pension} />
+                <h4>APORTES Y DEDUCCIONES</h4>
+                <Money label="EPS" value={payroll.salud} />
+                <Money label="PENSIONES" value={payroll.pension} />
                 <Money label="ARL" value={payroll.arl} />
-                <Money
-                  label="Parafiscales / COMFANDI"
-                  value={payroll.parafiscales}
-                />
-                <Money label="Bienestar social" value={payroll.bienestar} />
-                <Money label="Retefuente" value={payroll.retencion} />
-                <Money
-                  label="Otros descuentos"
-                  value={payroll.otrosDescuentos}
-                />
+                <Money label="COMFANDI" value={payroll.parafiscales} />
+                <Money label="BIENESTAR SOCIAL" value={payroll.bienestar} />
+                <Money label="RETEFUENTE" value={payroll.retencion} />
+                <Money label="DEDUCCIONES ADICIONALES" value={payroll.otrosDescuentos} />
+                <Money label="TOTAL DEDUCCIONES" value={payrollDeductions} strong />
               </div>
             </div>
             <div className="payrollTotal">
-              <span>Total a pagar / valor recibido del mes</span>
+              <span>TOTAL A PAGAR</span>
               <b>{cop(payroll.totalRecibido)}</b>
             </div>
-            <p className="mini">
-              Valores leídos por encabezado desde {payroll.tab}. Costo del
-              proceso: {cop(payroll.costoProceso)} · Total del proceso:{" "}
-              {cop(payroll.totalProceso)}
-            </p>
+            <div className="payrollScreenSignatures"><span>ELABORÓ<br/><b>Coordinación administrativa</b></span><span>FIRMA Y CÉDULA AFILIADO PARTÍCIPE</span></div>
           </div>
         )}
       </div>
@@ -520,9 +508,9 @@ export function NominaComprobantes({ session }: any) {
   );
 }
 
-function Money({ label, value }: any) {
+function Money({ label, value, strong = false }: any) {
   return (
-    <div className="moneyRow">
+    <div className={`moneyRow ${strong ? "strong" : ""}`}>
       <span>{label}</span>
       <b>{cop(value)}</b>
     </div>
