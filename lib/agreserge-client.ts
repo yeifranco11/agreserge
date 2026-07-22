@@ -26,13 +26,21 @@ export async function saveRemoteDB(db: unknown) {
   return payload;
 }
 
-export async function uploadDocument(documentId: string, file: File) {
+export async function uploadDocument(documentId: string, file: File, append = false) {
   const form = new FormData();
   form.append('documentId', documentId);
   form.append('file', file);
+  form.append('append', String(append));
   const response = await fetch('/api/agreserge-documents', { method: 'POST', body: form });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload?.error || 'No se pudo cargar el documento');
+  return payload;
+}
+
+export async function deleteDocument(documentId: string) {
+  const response = await fetch(`/api/agreserge-documents/${encodeURIComponent(documentId)}`, { method: 'DELETE' });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload?.error || 'No se pudo eliminar el documento');
   return payload;
 }
 

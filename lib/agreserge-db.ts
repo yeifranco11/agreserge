@@ -21,6 +21,9 @@ export const defaultPermissions: Record<string, string[]> = {
   'Coordinadora Administrativa y Financiera':['Inicio','Dashboard gerente','Informes de actividades','Asignación mensual','Nómina y comprobantes','Solicitudes y firmas','Trámites administrativos','Auditoría','AGREBOT'],
   'Talento Humano':['Inicio','Parámetros institucionales','Usuarios y claves','Ficha técnica','AGREBOT'],
   'Experiencia al Agremiado':['Inicio','Usuarios y claves','Ficha técnica','AGREBOT'],
+  'Asesora de Calidad':['Inicio','Dashboard gerente','Ficha técnica','Revisión documental','Informes de actividades','AGREBOT','Auditoría'],
+  'Director Ejecutivo':['Inicio','Dashboard gerente','Parámetros institucionales','Ficha técnica','Revisión documental','Informes de actividades','Asignación mensual','Usuarios y claves','AGREBOT','Auditoría'],
+  'Seguridad y Salud en el Trabajo':['Inicio','Dashboard gerente','Ficha técnica','Revisión documental','Informes de actividades','AGREBOT','Auditoría'],
   'Administrador de Sistemas':['Inicio','Dashboard gerente','Parámetros institucionales','Ficha técnica','Cargue documental','Revisión documental','Mis agremiados','Informes de actividades','Asignación mensual','Nómina y comprobantes','Solicitudes y firmas','Trámites administrativos','Permisos por perfil','Usuarios y claves','AGREBOT','Auditoría'],
   'Gerente':['Inicio','Dashboard gerente','Informes de actividades','Auditoría','AGREBOT'],
 };
@@ -40,6 +43,9 @@ const requiredOperationalModules: Record<string, string[]> = {
   'Coordinador General': ['Ficha técnica'],
   'Talento Humano': ['Ficha técnica'],
   'Experiencia al Agremiado': ['Ficha técnica'],
+  'Asesora de Calidad': ['Dashboard gerente', 'Ficha técnica', 'Revisión documental', 'Informes de actividades'],
+  'Director Ejecutivo': ['Dashboard gerente', 'Asignación mensual', 'Informes de actividades'],
+  'Seguridad y Salud en el Trabajo': ['Dashboard gerente', 'Ficha técnica', 'Informes de actividades'],
   'Administrador de Sistemas': ['Ficha técnica', 'Nómina y comprobantes', 'Solicitudes y firmas', 'AGREBOT'],
 };
 

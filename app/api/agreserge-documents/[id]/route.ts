@@ -40,3 +40,27 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     return NextResponse.json({ error: error.message || 'No se pudo abrir el documento' }, { status: 500 });
   }
 }
+
+export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const userId = await getSessionUserId();
+    if (!userId) return NextResponse.json({ error: 'Sesión requerida' }, { status: 401 });
+    const { id } = await params;
+    const supabase = requireSupabaseAdmin(); const database = supabase as any;
+    const { data, error } = await database.from('agreserge_documents').select('*').eq('id', id).maybeSingle();
+    if (error) throw error;
+    const document = data as any;
+    if (!document || document.agremiado_id !== userId) return NextResponse.json({ error: 'Solo puede eliminar documentos de su propio perfil' }, { status: 403 });
+    if (document.archivo_path && !String(document.archivo_path).startsWith('data:')) await supabase.storage.from(BUCKET).remove([document.archivo_path]);
+    const isAdditional = String(document.nombre || '').includes(' — ');
+    const query = database.from('agreserge_documents');
+    const { error: mutationError } = isAdditional
+      ? await query.delete().eq('id', id).eq('agremiado_id', userId)
+      : await query.update({ archivo_path:null, archivo_nombre:null, archivo_tipo:null, archivo_tamano:null, fecha_carga:null, estado:'Pendiente', observacion:'Pendiente por cargar', updated_at:new Date().toISOString() }).eq('id', id).eq('agremiado_id', userId);
+    if (mutationError) throw mutationError;
+    await database.from('agreserge_audit').insert({ usuario_id:userId, evento:`Documento eliminado: ${document.nombre}`, metadata:{documentId:id} });
+    return NextResponse.json({ ok:true, db:await loadDB() });
+  } catch (error:any) {
+    return NextResponse.json({ error:error.message || 'No se pudo eliminar el documento' }, { status:500 });
+  }
+}

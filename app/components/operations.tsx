@@ -1,71 +1,988 @@
-'use client';
+"use client";
 
-import { useMemo, useState } from 'react';
-import { CheckCircle2, Download, FileCheck2, FileSpreadsheet, Search, ShieldCheck, XCircle } from 'lucide-react';
-import { createDigitalRequest, decideDigitalRequest, loadPayrollReport, lookupPayroll } from '../../lib/agreserge-client';
+import { useMemo, useState } from "react";
+import {
+  CheckCircle2,
+  Download,
+  FileCheck2,
+  FileSpreadsheet,
+  Search,
+  ShieldCheck,
+  XCircle,
+} from "lucide-react";
+import {
+  createDigitalRequest,
+  decideDigitalRequest,
+  loadPayrollReport,
+  lookupPayroll,
+} from "../../lib/agreserge-client";
 
-const SHEET_URL = 'https://docs.google.com/spreadsheets/d/11R2hU9IzD55MBa8FivztC38boeQAxGpoMly_3yH0Ajk/edit?usp=sharing';
-const cop = (value: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(value || 0);
+const SHEET_URL =
+  "https://docs.google.com/spreadsheets/d/11R2hU9IzD55MBa8FivztC38boeQAxGpoMly_3yH0Ajk/edit?usp=sharing";
+const cop = (value: number) =>
+  new Intl.NumberFormat("es-CO", {
+    style: "currency",
+    currency: "COP",
+    maximumFractionDigits: 0,
+  }).format(value || 0);
 
 export function NominaComprobantes({ session }: any) {
-  const [documento, setDocumento] = useState('');
+  const [documento, setDocumento] = useState("");
   const [payroll, setPayroll] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [report,setReport]=useState<any>(null); const [reportLoading,setReportLoading]=useState(false);
-  const canManage = ['Administrador de Sistemas','Coordinadora','Coordinación AGRESERGE','Coordinación General','Coordinación Administrativa','Coordinador de Sede','Tesorería','Coordinadora Administrativa y Financiera','Coordinador General','Gerente'].includes(session.rol);
+  const [error, setError] = useState("");
+  const [report, setReport] = useState<any>(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const canManage = [
+    "Administrador de Sistemas",
+    "Coordinadora",
+    "Coordinación AGRESERGE",
+    "Coordinación General",
+    "Coordinación Administrativa",
+    "Coordinador de Sede",
+    "Tesorería",
+    "Coordinadora Administrativa y Financiera",
+    "Coordinador General",
+    "Gerente",
+  ].includes(session.rol);
 
   const buscar = async () => {
-    setLoading(true); setError(''); setPayroll(null);
-    try { const result = await lookupPayroll(documento); setPayroll(result.payroll); }
-    catch (e: any) { setError(e.message); }
-    finally { setLoading(false); }
+    setLoading(true);
+    setError("");
+    setPayroll(null);
+    try {
+      const result = await lookupPayroll(documento);
+      setPayroll(result.payroll);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
   };
   const imprimir = () => {
     if (!payroll) return;
-    const windowRef = window.open('', '_blank', 'width=900,height=900');
-    if (!windowRef) return alert('Permite ventanas emergentes para generar el comprobante.');
-    const deductions = payroll.salud + payroll.pension + payroll.arl + payroll.parafiscales + payroll.bienestar + payroll.retencion + payroll.otrosDescuentos;
-    windowRef.document.write(`<!doctype html><html><head><title>Comprobante ${payroll.documento}</title><style>body{font-family:Arial;margin:35px;color:#14213d}.head{display:flex;justify-content:space-between;border-bottom:4px solid #1261a0;padding-bottom:18px}.brand{font-size:25px;font-weight:800}.tag{color:#1261a0;text-transform:uppercase;font-weight:700}.box{border:1px solid #dbe4ee;border-radius:14px;padding:18px;margin-top:18px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.cols{display:grid;grid-template-columns:1fr 1fr;gap:18px}.row{display:flex;justify-content:space-between;padding:8px;border-bottom:1px solid #edf2f7}.total{background:#eaf4ff;font-size:20px;font-weight:800}.sig{margin-top:55px;display:grid;grid-template-columns:1fr 1fr;gap:60px}.line{border-top:1px solid #111;padding-top:8px;text-align:center}@media print{button{display:none}}</style></head><body><div class="head"><div><div class="tag">Portal institucional</div><div class="brand">AGRESERGE</div></div><div><b>COMPROBANTE DE COMPENSACIÓN</b><br>${new Date().toLocaleDateString('es-CO')}</div></div><div class="box grid"><div><b>Afiliado partícipe</b><br>${payroll.nombre}</div><div><b>Documento</b><br>${payroll.documento}</div><div><b>Cargo / proceso</b><br>${payroll.cargo}</div><div><b>Área</b><br>${payroll.area}</div><div><b>Días compensados</b><br>${payroll.dias}</div><div><b>Fuente</b><br>${payroll.tab}</div></div><div class="box cols"><div><h3>Compensaciones</h3><div class="row"><span>Ordinaria</span><b>${cop(payroll.ordinaria)}</b></div><div class="row"><span>Otras compensaciones</span><b>${cop(payroll.otras)}</b></div><div class="row"><span>Transporte</span><b>${cop(payroll.transporte)}</b></div><div class="row"><span>Tiempo adicional / triage</span><b>${cop(payroll.adicionales)}</b></div><div class="row"><span>Total compensado</span><b>${cop(payroll.ordinaria+payroll.otras)}</b></div></div><div><h3>Aportes y deducciones</h3><div class="row"><span>Salud / EPS</span><b>${cop(payroll.salud)}</b></div><div class="row"><span>Pensión</span><b>${cop(payroll.pension)}</b></div><div class="row"><span>ARL</span><b>${cop(payroll.arl)}</b></div><div class="row"><span>Parafiscales / COMFANDI</span><b>${cop(payroll.parafiscales)}</b></div><div class="row"><span>Bienestar social</span><b>${cop(payroll.bienestar)}</b></div><div class="row"><span>Retefuente</span><b>${cop(payroll.retencion)}</b></div><div class="row"><span>Otros descuentos</span><b>${cop(payroll.otrosDescuentos)}</b></div></div></div><div class="box row total"><span>Total a pagar / valor recibido del mes</span><b>${cop(payroll.totalRecibido)}</b></div><div class="sig"><div class="line">Coordinación administrativa</div><div class="line">Firma digital afiliado partícipe</div></div><p style="margin-top:35px;font-size:11px;color:#5b6777">Generado electrónicamente desde el Portal AGRESERGE. Fuente: FORMATO NÓMINA HGC. Aportes y deducciones registrados: ${cop(deductions)}. Costo del proceso: ${cop(payroll.costoProceso)}.</p><script>window.onload=()=>window.print()</script></body></html>`);
+    const windowRef = window.open("", "_blank", "width=900,height=900");
+    if (!windowRef)
+      return alert("Permite ventanas emergentes para generar el comprobante.");
+    const deductions =
+      payroll.salud +
+      payroll.pension +
+      payroll.arl +
+      payroll.parafiscales +
+      payroll.bienestar +
+      payroll.retencion +
+      payroll.otrosDescuentos;
+    windowRef.document.write(
+      `<!doctype html><html><head><title>Comprobante ${payroll.documento}</title><style>body{font-family:Arial;margin:35px;color:#14213d}.head{display:flex;justify-content:space-between;border-bottom:4px solid #1261a0;padding-bottom:18px}.brand{font-size:25px;font-weight:800}.tag{color:#1261a0;text-transform:uppercase;font-weight:700}.box{border:1px solid #dbe4ee;border-radius:14px;padding:18px;margin-top:18px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.cols{display:grid;grid-template-columns:1fr 1fr;gap:18px}.row{display:flex;justify-content:space-between;padding:8px;border-bottom:1px solid #edf2f7}.total{background:#eaf4ff;font-size:20px;font-weight:800}.sig{margin-top:55px;display:grid;grid-template-columns:1fr 1fr;gap:60px}.line{border-top:1px solid #111;padding-top:8px;text-align:center}@media print{button{display:none}}</style></head><body><div class="head"><div><div class="tag">Portal institucional</div><div class="brand">AGRESERGE</div></div><div><b>COMPROBANTE DE COMPENSACIÓN</b><br>${new Date().toLocaleDateString("es-CO")}</div></div><div class="box grid"><div><b>Afiliado partícipe</b><br>${payroll.nombre}</div><div><b>Documento</b><br>${payroll.documento}</div><div><b>Cargo / proceso</b><br>${payroll.cargo}</div><div><b>Área</b><br>${payroll.area}</div><div><b>Días compensados</b><br>${payroll.dias}</div><div><b>Fuente</b><br>${payroll.tab}</div></div><div class="box cols"><div><h3>Compensaciones</h3><div class="row"><span>Ordinaria</span><b>${cop(payroll.ordinaria)}</b></div><div class="row"><span>Otras compensaciones</span><b>${cop(payroll.otras)}</b></div><div class="row"><span>Transporte</span><b>${cop(payroll.transporte)}</b></div><div class="row"><span>Tiempo adicional / triage</span><b>${cop(payroll.adicionales)}</b></div><div class="row"><span>Total compensado</span><b>${cop(payroll.ordinaria + payroll.otras)}</b></div></div><div><h3>Aportes y deducciones</h3><div class="row"><span>Salud / EPS</span><b>${cop(payroll.salud)}</b></div><div class="row"><span>Pensión</span><b>${cop(payroll.pension)}</b></div><div class="row"><span>ARL</span><b>${cop(payroll.arl)}</b></div><div class="row"><span>Parafiscales / COMFANDI</span><b>${cop(payroll.parafiscales)}</b></div><div class="row"><span>Bienestar social</span><b>${cop(payroll.bienestar)}</b></div><div class="row"><span>Retefuente</span><b>${cop(payroll.retencion)}</b></div><div class="row"><span>Otros descuentos</span><b>${cop(payroll.otrosDescuentos)}</b></div></div></div><div class="box row total"><span>Total a pagar / valor recibido del mes</span><b>${cop(payroll.totalRecibido)}</b></div><div class="sig"><div class="line">Coordinación administrativa</div><div class="line">Firma digital afiliado partícipe</div></div><p style="margin-top:35px;font-size:11px;color:#5b6777">Generado electrónicamente desde el Portal AGRESERGE. Fuente: FORMATO NÓMINA HGC. Aportes y deducciones registrados: ${cop(deductions)}. Costo del proceso: ${cop(payroll.costoProceso)}.</p><script>window.onload=()=>window.print()</script></body></html>`,
+    );
+    windowRef.document.body.innerHTML = windowRef.document.body.innerHTML
+      .replace("Cargo / proceso", "PROCESO")
+      .replace("<b>Área</b>", "<b>ÁREA O SERVICIO</b>")
+      .replace("Otras compensaciones", "Compensación por descanso")
+      .replace("<span>Transporte</span>", "<span>Compensación por transporte</span>")
+      .replace("Tiempo adicional / triage", "Compensación por tiempo adicional");
+    const brand = windowRef.document.querySelector(".head > div");
+    if (brand) {
+      const logo = windowRef.document.createElement("img");
+      logo.src = `${location.origin}/logo.png`;
+      logo.alt = "Logo AGRESERGE";
+      logo.style.cssText =
+        "width:72px;height:72px;object-fit:contain;float:left;margin-right:14px";
+      brand.prepend(logo);
+    }
     windowRef.document.close();
   };
-  const generarInforme=async()=>{setReportLoading(true);setError('');try{setReport(await loadPayrollReport())}catch(e:any){setError(e.message)}finally{setReportLoading(false)}};
-  const exportarInforme=()=>{if(!report)return;const headers=['Documento','Nombre','Cargo','Area','Hospital/Pestaña','Dias','Compensacion ordinaria','Salud','Pension','ARL','Retencion','Total recibido','Costo total proceso'];const lines=[headers,...report.rows.map((r:any)=>[r.documento,r.nombre,r.cargo,r.area,r.tab,r.dias,r.ordinaria,r.salud,r.pension,r.arl,r.retencion,r.totalRecibido,r.totalProceso])].map(row=>row.map((v:any)=>`"${String(v??'').replace(/"/g,'""')}"`).join(','));const blob=new Blob(['\ufeff'+lines.join('\n')],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`informe_nomina_agreserge_${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(a.href)};
+  const generarInforme = async () => {
+    setReportLoading(true);
+    setError("");
+    try {
+      setReport(await loadPayrollReport());
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setReportLoading(false);
+    }
+  };
+  const exportarInforme = () => {
+    if (!report) return;
+    const headers = [
+      "Documento",
+      "Nombre",
+      "Proceso",
+      "Área o servicio",
+      "Hospital/Pestaña",
+      "Dias",
+      "Compensacion ordinaria",
+      "Salud",
+      "Pension",
+      "ARL",
+      "Retencion",
+      "Total recibido",
+      "Costo total proceso",
+    ];
+    const lines = [
+      headers,
+      ...report.rows.map((r: any) => [
+        r.documento,
+        r.nombre,
+        r.cargo,
+        r.area,
+        r.tab,
+        r.dias,
+        r.ordinaria,
+        r.salud,
+        r.pension,
+        r.arl,
+        r.retencion,
+        r.totalRecibido,
+        r.totalProceso,
+      ]),
+    ].map((row) =>
+      row.map((v: any) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(","),
+    );
+    const blob = new Blob(["\ufeff" + lines.join("\n")], {
+      type: "text/csv;charset=utf-8",
+    });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `informe_nomina_agreserge_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
 
-  return <div className="grid">
-    <div className="welcomeCard span12"><div><span className="welcomeTag">Nómina integrada</span><h2>Centro de nómina y comprobantes</h2><p>Consulta la hoja institucional en línea y genera comprobantes individuales directamente por documento.</p></div><div className="welcomeLogo"><FileSpreadsheet size={54}/></div></div>
-    {canManage&&<div className="card span12"><div className="row between"><div><h3>Nómina HGC en línea</h3><p className="muted">La coordinadora mantiene los cálculos en Google Sheets; el portal consulta siempre la versión vigente.</p></div><a className="btn primary" href={SHEET_URL} target="_blank">Abrir hoja completa</a></div><iframe className="sheetFrame" src={`${SHEET_URL.replace('/edit?usp=sharing','/preview')}`}/></div>}
-    {canManage&&<div className="card span12"><div className="row between"><div><h3>Inteligencia e informes de nómina</h3><p className="muted">Indicadores automáticos por hospital, área y cargo tomados de la hoja vigente.</p></div><div className="row"><button className="btn primary" disabled={reportLoading} onClick={generarInforme}>{reportLoading?'Analizando nómina...':'Generar indicadores'}</button>{report&&<button className="btn" onClick={exportarInforme}><Download size={14}/> Exportar informe CSV</button>}</div></div>{report&&<><div className="payrollKpis"><div><span>Personas</span><b>{report.totals.personas}</b></div><div><span>Compensación ordinaria</span><b>{cop(report.totals.ordinaria)}</b></div><div><span>Total recibido</span><b>{cop(report.totals.totalRecibido)}</b></div><div><span>Costo total de procesos</span><b>{cop(report.totals.totalProceso)}</b></div></div><div className="reportColumns"><ReportTable title="Por hospital / proceso" rows={report.porHospital}/><ReportTable title="Por área" rows={report.porArea}/><ReportTable title="Por cargo" rows={report.porCargo.slice(0,12)}/></div><p className="mini">Actualizado: {new Date(report.updatedAt).toLocaleString('es-CO')} · Fuente: FORMATO NÓMINA HGC.</p></>}</div>}
-    <div className="card span4"><h3><Search size={19}/> Buscar comprobante</h3><div className="field"><label>Número de documento</label><input className="input" inputMode="numeric" value={documento} onChange={e=>setDocumento(e.target.value.replace(/\D/g,''))} placeholder="Ej. 1112623101"/></div><button className="btn primary" disabled={loading||!documento} onClick={buscar}>{loading?'Consultando nómina...':'Consultar en línea'}</button>{error&&<p className="obsBox">{error}</p>}<p className="mini"><ShieldCheck size={13}/> Consulta protegida por sesión y trazabilidad.</p></div>
-    <div className="card span8">{!payroll?<div className="emptyPayroll"><FileCheck2 size={48}/><h3>Comprobante digital</h3><p>Busca un documento para previsualizar el comprobante.</p></div>:<div className="payrollSlip"><div className="row between"><div><span className="welcomeTag">Comprobante de compensación</span><h2>{payroll.nombre}</h2><p>{payroll.documento} · {payroll.cargo} · {payroll.area}</p></div><button className="btn primary" onClick={imprimir}><Download size={15}/> Generar PDF / imprimir</button></div><div className="payrollColumns"><div><h4>Compensaciones</h4><Money label="Compensación ordinaria" value={payroll.ordinaria}/><Money label="Otras compensaciones" value={payroll.otras}/><Money label="Compensación por transporte" value={payroll.transporte}/><Money label="Tiempo adicional / triage" value={payroll.adicionales}/><Money label="Total compensado" value={payroll.ordinaria+payroll.otras}/></div><div><h4>Aportes y deducciones</h4><Money label="Salud / EPS" value={payroll.salud}/><Money label="Pensión" value={payroll.pension}/><Money label="ARL" value={payroll.arl}/><Money label="Parafiscales / COMFANDI" value={payroll.parafiscales}/><Money label="Bienestar social" value={payroll.bienestar}/><Money label="Retefuente" value={payroll.retencion}/><Money label="Otros descuentos" value={payroll.otrosDescuentos}/></div></div><div className="payrollTotal"><span>Total a pagar / valor recibido del mes</span><b>{cop(payroll.totalRecibido)}</b></div><p className="mini">Valores leídos por encabezado desde {payroll.tab}. Costo del proceso: {cop(payroll.costoProceso)} · Total del proceso: {cop(payroll.totalProceso)}</p></div>}</div>
-  </div>;
+  return (
+    <div className="grid">
+      <div className="welcomeCard span12">
+        <div>
+          <span className="welcomeTag">Nómina integrada</span>
+          <h2>Centro de nómina y comprobantes</h2>
+          <p>
+            Consulta la hoja institucional en línea y genera comprobantes
+            individuales directamente por documento.
+          </p>
+        </div>
+        <div className="welcomeLogo">
+          <FileSpreadsheet size={54} />
+        </div>
+      </div>
+      {canManage && (
+        <div className="card span12">
+          <div className="row between">
+            <div>
+              <h3>Nómina HGC en línea</h3>
+              <p className="muted">
+                La coordinadora mantiene los cálculos en Google Sheets; el
+                portal consulta siempre la versión vigente.
+              </p>
+            </div>
+            <a className="btn primary" href={SHEET_URL} target="_blank">
+              Abrir hoja completa
+            </a>
+          </div>
+          <iframe
+            className="sheetFrame"
+            src={`${SHEET_URL.replace("/edit?usp=sharing", "/preview")}`}
+          />
+        </div>
+      )}
+      {canManage && (
+        <div className="card span12">
+          <div className="row between">
+            <div>
+              <h3>Inteligencia e informes de nómina</h3>
+              <p className="muted">
+                Indicadores automáticos por hospital, proceso y área o servicio tomados de la
+                hoja vigente.
+              </p>
+            </div>
+            <div className="row">
+              <button
+                className="btn primary"
+                disabled={reportLoading}
+                onClick={generarInforme}
+              >
+                {reportLoading ? "Analizando nómina..." : "Generar indicadores"}
+              </button>
+              {report && (
+                <button className="btn" onClick={exportarInforme}>
+                  <Download size={14} /> Exportar informe CSV
+                </button>
+              )}
+            </div>
+          </div>
+          {report && (
+            <>
+              <div className="payrollKpis">
+                <div>
+                  <span>Personas</span>
+                  <b>{report.totals.personas}</b>
+                </div>
+                <div>
+                  <span>Compensación ordinaria</span>
+                  <b>{cop(report.totals.ordinaria)}</b>
+                </div>
+                <div>
+                  <span>Total recibido</span>
+                  <b>{cop(report.totals.totalRecibido)}</b>
+                </div>
+                <div>
+                  <span>Costo total de procesos</span>
+                  <b>{cop(report.totals.totalProceso)}</b>
+                </div>
+              </div>
+              <div className="reportColumns">
+                <ReportTable
+                  title="Por hospital / proceso"
+                  rows={report.porHospital}
+                />
+                <ReportTable title="Por área" rows={report.porArea} />
+                <ReportTable
+                  title="Por área o servicio"
+                  rows={report.porCargo.slice(0, 12)}
+                />
+              </div>
+              <p className="mini">
+                Actualizado:{" "}
+                {new Date(report.updatedAt).toLocaleString("es-CO")} · Fuente:
+                FORMATO NÓMINA HGC.
+              </p>
+            </>
+          )}
+        </div>
+      )}
+      <div className="card span4">
+        <h3>
+          <Search size={19} /> Buscar comprobante
+        </h3>
+        <div className="field">
+          <label>Número de documento</label>
+          <input
+            className="input"
+            inputMode="numeric"
+            value={documento}
+            onChange={(e) => setDocumento(e.target.value.replace(/\D/g, ""))}
+            placeholder="Ej. 1112623101"
+          />
+        </div>
+        <button
+          className="btn primary"
+          disabled={loading || !documento}
+          onClick={buscar}
+        >
+          {loading ? "Consultando nómina..." : "Consultar en línea"}
+        </button>
+        {error && <p className="obsBox">{error}</p>}
+        <p className="mini">
+          <ShieldCheck size={13} /> Consulta protegida por sesión y
+          trazabilidad.
+        </p>
+      </div>
+      <div className="card span8">
+        {!payroll ? (
+          <div className="emptyPayroll">
+            <FileCheck2 size={48} />
+            <h3>Comprobante digital</h3>
+            <p>Busca un documento para previsualizar el comprobante.</p>
+          </div>
+        ) : (
+          <div className="payrollSlip">
+            <div className="row between">
+              <div className="row">
+                <img src="/logo.png" alt="AGRESERGE" style={{width:72,height:72,objectFit:"contain"}} />
+                <div>
+                <span className="welcomeTag">Comprobante de compensación</span>
+                <h2>{payroll.nombre}</h2>
+                <p>{payroll.documento} · PROCESO: {payroll.cargo} · ÁREA O SERVICIO: {payroll.area}</p>
+                </div>
+              </div>
+              <button className="btn primary" onClick={imprimir}>
+                <Download size={15} /> Generar PDF / imprimir
+              </button>
+            </div>
+            <div className="payrollColumns">
+              <div>
+                <h4>Compensaciones</h4>
+                <Money
+                  label="Compensación ordinaria"
+                  value={payroll.ordinaria}
+                />
+                <Money label="Compensación por descanso" value={payroll.otras} />
+                <Money
+                  label="Compensación por transporte"
+                  value={payroll.transporte}
+                />
+                <Money
+                  label="Compensación por tiempo adicional"
+                  value={payroll.adicionales}
+                />
+                <Money
+                  label="Total compensado"
+                  value={payroll.ordinaria + payroll.otras}
+                />
+              </div>
+              <div>
+                <h4>Aportes y deducciones</h4>
+                <Money label="Salud / EPS" value={payroll.salud} />
+                <Money label="Pensión" value={payroll.pension} />
+                <Money label="ARL" value={payroll.arl} />
+                <Money
+                  label="Parafiscales / COMFANDI"
+                  value={payroll.parafiscales}
+                />
+                <Money label="Bienestar social" value={payroll.bienestar} />
+                <Money label="Retefuente" value={payroll.retencion} />
+                <Money
+                  label="Otros descuentos"
+                  value={payroll.otrosDescuentos}
+                />
+              </div>
+            </div>
+            <div className="payrollTotal">
+              <span>Total a pagar / valor recibido del mes</span>
+              <b>{cop(payroll.totalRecibido)}</b>
+            </div>
+            <p className="mini">
+              Valores leídos por encabezado desde {payroll.tab}. Costo del
+              proceso: {cop(payroll.costoProceso)} · Total del proceso:{" "}
+              {cop(payroll.totalProceso)}
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
-function Money({label,value}:any){return <div className="moneyRow"><span>{label}</span><b>{cop(value)}</b></div>}
-function ReportTable({title,rows}:any){return <div className="reportBox"><h4>{title}</h4><div className="reportScroll"><table className="table"><thead><tr><th>Grupo</th><th>Personas</th><th>Total recibido</th><th>Costo proceso</th></tr></thead><tbody>{rows.map((r:any)=><tr key={r.grupo}><td><b>{r.grupo}</b></td><td>{r.personas}</td><td>{cop(r.totalRecibido)}</td><td>{cop(r.totalProceso)}</td></tr>)}</tbody></table></div></div>}
+function Money({ label, value }: any) {
+  return (
+    <div className="moneyRow">
+      <span>{label}</span>
+      <b>{cop(value)}</b>
+    </div>
+  );
+}
+function ReportTable({ title, rows }: any) {
+  return (
+    <div className="reportBox">
+      <h4>{title}</h4>
+      <div className="reportScroll">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Grupo</th>
+              <th>Personas</th>
+              <th>Total recibido</th>
+              <th>Costo proceso</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r: any) => (
+              <tr key={r.grupo}>
+                <td>
+                  <b>{r.grupo}</b>
+                </td>
+                <td>{r.personas}</td>
+                <td>{cop(r.totalRecibido)}</td>
+                <td>{cop(r.totalProceso)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
 
 export function SolicitudesFirmas({ session, db, setDb }: any) {
-  const [tipo,setTipo]=useState('Solicitud de permiso');
-  const [form,setForm]=useState<any>({fechaSolicitud:new Date().toISOString().slice(0,10),motivo:'Ausencia personal',turnoSolicita:'Completo',turnoAcepta:'Completo',coberturaCompensada:'Sí'});
-  const [loading,setLoading]=useState(false);
-  const parsed = (value:any)=>{try{return JSON.parse(value||'{}')}catch{return {detalle:value}}};
-  const inbox=useMemo(()=> (db.tramites||[]).filter((item:any)=>['Solicitud de permiso','Cambio de turno','Solicitud de viáticos'].includes(item.tipo)).filter((item:any)=>{const meta=parsed(item.observacion);if(session.rol==='Agremiado')return item.agremiadoId===session.id;if(['Líder Institucional','Líder de Proceso'].includes(session.rol))return meta.liderId===session.id;return true}),[db.tramites,session]);
-  const sync=(payload:any)=>{if(payload.db){setDb(payload.db);localStorage.setItem('portal_agreserge_db_v31',JSON.stringify(payload.db))}};
-  const perfil=db.perfiles?.[session.id]||{}; const lider=db.usuarios.find((u:any)=>u.id===session.liderId);
-  const reset=()=>setForm({fechaSolicitud:new Date().toISOString().slice(0,10),motivo:'Ausencia personal',turnoSolicita:'Completo',turnoAcepta:'Completo',coberturaCompensada:'Sí'});
-  const enviar=async()=>{setLoading(true);try{const payload=await createDigitalRequest(tipo,{...form,documento:perfil.documento||'',areaNombre:db.areas.find((a:any)=>a.id===session.areaId)?.nombre||'',proceso:perfil.proceso||session.cargo||'',cargo:session.cargo||'',entidad:session.entidadId,liderNombre:lider?.nombre||form.liderNombre||''});sync(payload);reset();alert('Solicitud radicada y firmada digitalmente.')}catch(e:any){alert(e.message)}finally{setLoading(false)}};
-  const decidir=async(id:string,action:string)=>{const comentario=prompt('Comentario de la decisión (opcional)','')||'';try{sync(await decideDigitalRequest(id,action,comentario))}catch(e:any){alert(e.message)}};
-  return <div className="grid"><div className="welcomeCard span12"><div><span className="welcomeTag">Flujo sin papel</span><h2>Solicitudes, aprobaciones y firma digital</h2><p>El afiliado radica; el líder aprueba; coordinación administrativa o asistencial revisa y finaliza.</p></div><div className="welcomeLogo"><ShieldCheck size={54}/></div></div>
-    <div className="card span5 officialForm"><div className="formCode"><img src="/logo.png"/><div><b>AGRESERGE DEL VALLE</b><span>{tipo.toUpperCase()}</span></div><small>{tipo==='Solicitud de permiso'?'AD-FO-02':tipo==='Cambio de turno'?'AD-FO-04':'SOLICITUD DIGITAL'}<br/>VERSIÓN 01</small></div><div className="field"><label>Tipo de solicitud</label><select value={tipo} onChange={e=>{setTipo(e.target.value);reset()}}><option>Solicitud de permiso</option><option>Cambio de turno</option><option>Solicitud de viáticos</option></select></div><div className="formGrid"><Field label="Fecha de solicitud" type="date" value={form.fechaSolicitud} set={v=>setForm({...form,fechaSolicitud:v})}/><ReadField label="Afiliado(a) partícipe" value={session.nombre}/><ReadField label="Número de documento" value={perfil.documento||'Pendiente en ficha técnica'}/><ReadField label="Área / servicio" value={db.areas.find((a:any)=>a.id===session.areaId)?.nombre||'Sin registrar'}/><ReadField label="Proceso o función" value={perfil.proceso||session.cargo||'Sin registrar'}/><ReadField label="Líder de área" value={lider?.nombre||'Pendiente por asignar'}/></div>{tipo==='Solicitud de permiso'&&<><h4>Motivo de ausencia</h4><div className="choiceGrid">{['Ausencia personal','Cita médica','Calamidad doméstica','Capacitación','Compensatorio'].map(x=><label className={form.motivo===x?'selected':''} key={x}><input type="radio" name="motivo" checked={form.motivo===x} onChange={()=>setForm({...form,motivo:x})}/>{x}</label>)}</div>{form.motivo==='Compensatorio'&&<Field label="Fecha laborada que compensa" type="date" value={form.fechaLaborada||''} set={v=>setForm({...form,fechaLaborada:v})}/>}<DatePair form={form} setForm={setForm} a="fechaSalida" b="fechaRegreso"/><ReadField label="Total días" value={daysBetween(form.fechaSalida,form.fechaRegreso)}/></>}{tipo==='Cambio de turno'&&<><h4>Afiliado(a) que acepta el cambio</h4><div className="formGrid"><Field label="Nombre completo" value={form.nombreAcepta||''} set={v=>setForm({...form,nombreAcepta:v})}/><Field label="C.C." inputMode="numeric" value={form.documentoAcepta||''} set={v=>setForm({...form,documentoAcepta:v.replace(/\D/g,'')})}/><Field label="Servicio (Área)" value={form.areaAcepta||''} set={v=>setForm({...form,areaAcepta:v})}/><Field label="Fecha de cobertura" type="date" value={form.fechaCobertura||''} set={v=>setForm({...form,fechaCobertura:v})}/><SelectField label="Cobertura que entrega" value={form.turnoSolicita} set={v=>setForm({...form,turnoSolicita:v})}/><SelectField label="Cobertura que recibe" value={form.turnoAcepta} set={v=>setForm({...form,turnoAcepta:v})}/><Field label="Fecha de devolución" type="date" value={form.fechaDevolucion||''} set={v=>setForm({...form,fechaDevolucion:v})}/><SelectField label="¿Cobertura compensada?" value={form.coberturaCompensada} set={v=>setForm({...form,coberturaCompensada:v})} options={['Sí','No']}/></div></>}{tipo==='Solicitud de viáticos'&&<><div className="formGrid"><Field label="Ciudad / destino" value={form.destino||''} set={v=>setForm({...form,destino:v})}/><Field label="Centro de costo" value={form.centroCosto||''} set={v=>setForm({...form,centroCosto:v})}/></div><Field label="Objeto del viaje" textarea value={form.objeto||''} set={v=>setForm({...form,objeto:v})}/><DatePair form={form} setForm={setForm} a="fechaSalida" b="fechaRegreso"/><div className="formGrid"><Field label="Transporte estimado" type="number" value={form.transporte||''} set={v=>setForm({...form,transporte:Number(v)})}/><Field label="Alojamiento estimado" type="number" value={form.alojamiento||''} set={v=>setForm({...form,alojamiento:Number(v)})}/><Field label="Alimentación estimada" type="number" value={form.alimentacion||''} set={v=>setForm({...form,alimentacion:Number(v)})}/><ReadField label="Total estimado" value={cop(Number(form.transporte||0)+Number(form.alojamiento||0)+Number(form.alimentacion||0))}/></div></>}<Field label="Observación / justificación" textarea value={form.detalle||''} set={v=>setForm({...form,detalle:v})}/><label className="signatureConsent"><input type="checkbox" required checked={Boolean(form.aceptaFirma)} onChange={e=>setForm({...form,aceptaFirma:e.target.checked})}/><span><b>Firma electrónica del solicitante</b><small>Confirmo que los datos son veraces y autorizo la trazabilidad de esta solicitud.</small></span></label><button className="btn primary full" disabled={loading||!form.aceptaFirma} onClick={enviar}>{loading?'Radicando...':'Radicar y firmar digitalmente'}</button></div>
-    <div className="card span7"><h3>Bandeja de solicitudes</h3><div className="requestList">{inbox.length===0&&<p className="muted">No hay solicitudes para este perfil.</p>}{inbox.map((item:any)=>{const meta=parsed(item.observacion);const canDecide=session.rol!=='Agremiado';return <article className="requestCard" key={item.id}><div className="row between"><div><span className={`pill ${item.estado==='Finalizado'?'ok':item.estado==='Rechazado'?'bad':'rev'}`}>{item.estado}</span><h4>{item.tipo}</h4><p>{meta.solicitanteNombre||'Afiliado partícipe'} · {meta.fechaSolicitud||item.generado}</p></div><ShieldCheck size={25}/></div><div className="requestMeta"><span><b>Motivo/destino:</b> {meta.motivo||meta.destino||meta.objeto||'No aplica'}</span><span><b>Fechas:</b> {meta.fechaSalida||meta.fechaCobertura||'-'} → {meta.fechaRegreso||meta.fechaDevolucion||'-'}</span></div><details><summary>Ver trazabilidad y firmas</summary>{(meta.historial||[]).map((h:any,i:number)=><p className="mini" key={i}>✓ {h.estado} · {h.nombre} · {new Date(h.fecha).toLocaleString()} · firma {String(h.firma).slice(0,12)}…</p>)}</details><div className="row"><button className="btn" onClick={()=>printRequest(item,meta)}><Download size={14}/> Ver formato / PDF</button>{canDecide&&item.estado!=='Finalizado'&&item.estado!=='Rechazado'&&<><button className="btn primary" onClick={()=>decidir(item.id,item.estado==='Aprobado por líder'?'finalize':'approve')}><CheckCircle2 size={14}/> {item.estado==='Aprobado por líder'?'Finalizar':'Aprobar y firmar'}</button><button className="btn" onClick={()=>decidir(item.id,'reject')}><XCircle size={14}/> Rechazar</button></>}</div></article>})}</div></div>
-  </div>;
+  const [tipo, setTipo] = useState("Solicitud de permiso");
+  const [form, setForm] = useState<any>({
+    fechaSolicitud: new Date().toISOString().slice(0, 10),
+    motivo: "Ausencia personal",
+    turnoSolicita: "Completo",
+    turnoAcepta: "Completo",
+    coberturaCompensada: "Sí",
+  });
+  const [loading, setLoading] = useState(false);
+  const parsed = (value: any) => {
+    try {
+      return JSON.parse(value || "{}");
+    } catch {
+      return { detalle: value };
+    }
+  };
+  const inbox = useMemo(
+    () =>
+      (db.tramites || [])
+        .filter((item: any) =>
+          [
+            "Solicitud de permiso",
+            "Cambio de turno",
+            "Solicitud de viáticos",
+          ].includes(item.tipo),
+        )
+        .filter((item: any) => {
+          const meta = parsed(item.observacion);
+          if (session.rol === "Agremiado")
+            return item.agremiadoId === session.id;
+          if (["Líder Institucional", "Líder de Proceso"].includes(session.rol))
+            return meta.liderId === session.id;
+          return true;
+        }),
+    [db.tramites, session],
+  );
+  const sync = (payload: any) => {
+    if (payload.db) {
+      setDb(payload.db);
+      localStorage.setItem(
+        "portal_agreserge_db_v31",
+        JSON.stringify(payload.db),
+      );
+    }
+  };
+  const perfil = db.perfiles?.[session.id] || {};
+  const lider = db.usuarios.find((u: any) => u.id === session.liderId);
+  const reset = () =>
+    setForm({
+      fechaSolicitud: new Date().toISOString().slice(0, 10),
+      motivo: "Ausencia personal",
+      turnoSolicita: "Completo",
+      turnoAcepta: "Completo",
+      coberturaCompensada: "Sí",
+    });
+  const enviar = async () => {
+    setLoading(true);
+    try {
+      const payload = await createDigitalRequest(tipo, {
+        ...form,
+        documento: perfil.documento || "",
+        areaNombre:
+          db.areas.find((a: any) => a.id === session.areaId)?.nombre || "",
+        proceso: perfil.proceso || session.cargo || "",
+        cargo: session.cargo || "",
+        entidad: session.entidadId,
+        liderNombre: lider?.nombre || form.liderNombre || "",
+      });
+      sync(payload);
+      reset();
+      alert("Solicitud radicada y firmada digitalmente.");
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+  const decidir = async (id: string, action: string) => {
+    const comentario = prompt("Comentario de la decisión (opcional)", "") || "";
+    try {
+      sync(await decideDigitalRequest(id, action, comentario));
+    } catch (e: any) {
+      alert(e.message);
+    }
+  };
+  return (
+    <div className="grid">
+      <div className="welcomeCard span12">
+        <div>
+          <span className="welcomeTag">Flujo sin papel</span>
+          <h2>Solicitudes, aprobaciones y firma digital</h2>
+          <p>
+            El afiliado radica; el líder aprueba; coordinación administrativa o
+            asistencial revisa y finaliza.
+          </p>
+        </div>
+        <div className="welcomeLogo">
+          <ShieldCheck size={54} />
+        </div>
+      </div>
+      <div className="card span5 officialForm">
+        <div className="formCode">
+          <img src="/logo.png" />
+          <div>
+            <b>AGRESERGE DEL VALLE</b>
+            <span>{tipo.toUpperCase()}</span>
+          </div>
+          <small>
+            {tipo === "Solicitud de permiso"
+              ? "AD-FO-02"
+              : tipo === "Cambio de turno"
+                ? "AD-FO-04"
+                : "SOLICITUD DIGITAL"}
+            <br />
+            VERSIÓN 01
+          </small>
+        </div>
+        <div className="field">
+          <label>Tipo de solicitud</label>
+          <select
+            value={tipo}
+            onChange={(e) => {
+              setTipo(e.target.value);
+              reset();
+            }}
+          >
+            <option>Solicitud de permiso</option>
+            <option>Cambio de turno</option>
+            <option>Solicitud de viáticos</option>
+          </select>
+        </div>
+        <div className="formGrid">
+          <Field
+            label="Fecha de solicitud"
+            type="date"
+            value={form.fechaSolicitud}
+            set={(v) => setForm({ ...form, fechaSolicitud: v })}
+          />
+          <ReadField label="Afiliado(a) partícipe" value={session.nombre} />
+          <ReadField
+            label="Número de documento"
+            value={perfil.documento || "Pendiente en ficha técnica"}
+          />
+          <ReadField
+            label="Área / servicio"
+            value={
+              db.areas.find((a: any) => a.id === session.areaId)?.nombre ||
+              "Sin registrar"
+            }
+          />
+          <ReadField
+            label="Proceso o función"
+            value={perfil.proceso || session.cargo || "Sin registrar"}
+          />
+          <ReadField
+            label="Líder de área"
+            value={lider?.nombre || "Pendiente por asignar"}
+          />
+        </div>
+        {tipo === "Solicitud de permiso" && (
+          <>
+            <h4>Motivo de ausencia</h4>
+            <div className="choiceGrid">
+              {[
+                "Ausencia personal",
+                "Cita médica",
+                "Calamidad doméstica",
+                "Capacitación",
+                "Compensatorio",
+              ].map((x) => (
+                <label className={form.motivo === x ? "selected" : ""} key={x}>
+                  <input
+                    type="radio"
+                    name="motivo"
+                    checked={form.motivo === x}
+                    onChange={() => setForm({ ...form, motivo: x })}
+                  />
+                  {x}
+                </label>
+              ))}
+            </div>
+            {form.motivo === "Compensatorio" && (
+              <Field
+                label="Fecha laborada que compensa"
+                type="date"
+                value={form.fechaLaborada || ""}
+                set={(v) => setForm({ ...form, fechaLaborada: v })}
+              />
+            )}
+            <DatePair
+              form={form}
+              setForm={setForm}
+              a="fechaSalida"
+              b="fechaRegreso"
+            />
+            <ReadField
+              label="Total días"
+              value={daysBetween(form.fechaSalida, form.fechaRegreso)}
+            />
+          </>
+        )}
+        {tipo === "Cambio de turno" && (
+          <>
+            <h4>Afiliado(a) que acepta el cambio</h4>
+            <div className="formGrid">
+              <Field
+                label="Nombre completo"
+                value={form.nombreAcepta || ""}
+                set={(v) => setForm({ ...form, nombreAcepta: v })}
+              />
+              <Field
+                label="C.C."
+                inputMode="numeric"
+                value={form.documentoAcepta || ""}
+                set={(v) =>
+                  setForm({ ...form, documentoAcepta: v.replace(/\D/g, "") })
+                }
+              />
+              <Field
+                label="Servicio (Área)"
+                value={form.areaAcepta || ""}
+                set={(v) => setForm({ ...form, areaAcepta: v })}
+              />
+              <Field
+                label="Fecha de cobertura"
+                type="date"
+                value={form.fechaCobertura || ""}
+                set={(v) => setForm({ ...form, fechaCobertura: v })}
+              />
+              <SelectField
+                label="Cobertura que entrega"
+                value={form.turnoSolicita}
+                set={(v) => setForm({ ...form, turnoSolicita: v })}
+              />
+              <SelectField
+                label="Cobertura que recibe"
+                value={form.turnoAcepta}
+                set={(v) => setForm({ ...form, turnoAcepta: v })}
+              />
+              <Field
+                label="Fecha de devolución"
+                type="date"
+                value={form.fechaDevolucion || ""}
+                set={(v) => setForm({ ...form, fechaDevolucion: v })}
+              />
+              <SelectField
+                label="¿Cobertura compensada?"
+                value={form.coberturaCompensada}
+                set={(v) => setForm({ ...form, coberturaCompensada: v })}
+                options={["Sí", "No"]}
+              />
+            </div>
+          </>
+        )}
+        {tipo === "Solicitud de viáticos" && (
+          <>
+            <div className="formGrid">
+              <Field
+                label="Ciudad / destino"
+                value={form.destino || ""}
+                set={(v) => setForm({ ...form, destino: v })}
+              />
+              <Field
+                label="Centro de costo"
+                value={form.centroCosto || ""}
+                set={(v) => setForm({ ...form, centroCosto: v })}
+              />
+            </div>
+            <Field
+              label="Objeto del viaje"
+              textarea
+              value={form.objeto || ""}
+              set={(v) => setForm({ ...form, objeto: v })}
+            />
+            <DatePair
+              form={form}
+              setForm={setForm}
+              a="fechaSalida"
+              b="fechaRegreso"
+            />
+            <div className="formGrid">
+              <Field
+                label="Transporte estimado"
+                type="number"
+                value={form.transporte || ""}
+                set={(v) => setForm({ ...form, transporte: Number(v) })}
+              />
+              <Field
+                label="Alojamiento estimado"
+                type="number"
+                value={form.alojamiento || ""}
+                set={(v) => setForm({ ...form, alojamiento: Number(v) })}
+              />
+              <Field
+                label="Alimentación estimada"
+                type="number"
+                value={form.alimentacion || ""}
+                set={(v) => setForm({ ...form, alimentacion: Number(v) })}
+              />
+              <ReadField
+                label="Total estimado"
+                value={cop(
+                  Number(form.transporte || 0) +
+                    Number(form.alojamiento || 0) +
+                    Number(form.alimentacion || 0),
+                )}
+              />
+            </div>
+          </>
+        )}
+        <Field
+          label="Observación / justificación"
+          textarea
+          value={form.detalle || ""}
+          set={(v) => setForm({ ...form, detalle: v })}
+        />
+        <label className="signatureConsent">
+          <input
+            type="checkbox"
+            required
+            checked={Boolean(form.aceptaFirma)}
+            onChange={(e) =>
+              setForm({ ...form, aceptaFirma: e.target.checked })
+            }
+          />
+          <span>
+            <b>Firma electrónica del solicitante</b>
+            <small>
+              Confirmo que los datos son veraces y autorizo la trazabilidad de
+              esta solicitud.
+            </small>
+          </span>
+        </label>
+        <button
+          className="btn primary full"
+          disabled={loading || !form.aceptaFirma}
+          onClick={enviar}
+        >
+          {loading ? "Radicando..." : "Radicar y firmar digitalmente"}
+        </button>
+      </div>
+      <div className="card span7">
+        <h3>Bandeja de solicitudes</h3>
+        <div className="requestList">
+          {inbox.length === 0 && (
+            <p className="muted">No hay solicitudes para este perfil.</p>
+          )}
+          {inbox.map((item: any) => {
+            const meta = parsed(item.observacion);
+            const canDecide = session.rol !== "Agremiado";
+            return (
+              <article className="requestCard" key={item.id}>
+                <div className="row between">
+                  <div>
+                    <span
+                      className={`pill ${item.estado === "Finalizado" ? "ok" : item.estado === "Rechazado" ? "bad" : "rev"}`}
+                    >
+                      {item.estado}
+                    </span>
+                    <h4>{item.tipo}</h4>
+                    <p>
+                      {meta.solicitanteNombre || "Afiliado partícipe"} ·{" "}
+                      {meta.fechaSolicitud || item.generado}
+                    </p>
+                  </div>
+                  <ShieldCheck size={25} />
+                </div>
+                <div className="requestMeta">
+                  <span>
+                    <b>Motivo/destino:</b>{" "}
+                    {meta.motivo || meta.destino || meta.objeto || "No aplica"}
+                  </span>
+                  <span>
+                    <b>Fechas:</b>{" "}
+                    {meta.fechaSalida || meta.fechaCobertura || "-"} →{" "}
+                    {meta.fechaRegreso || meta.fechaDevolucion || "-"}
+                  </span>
+                </div>
+                <details>
+                  <summary>Ver trazabilidad y firmas</summary>
+                  {(meta.historial || []).map((h: any, i: number) => (
+                    <p className="mini" key={i}>
+                      ✓ {h.estado} · {h.nombre} ·{" "}
+                      {new Date(h.fecha).toLocaleString()} · firma{" "}
+                      {String(h.firma).slice(0, 12)}…
+                    </p>
+                  ))}
+                </details>
+                <div className="row">
+                  <button
+                    className="btn"
+                    onClick={() => printRequest(item, meta)}
+                  >
+                    <Download size={14} /> Ver formato / PDF
+                  </button>
+                  {canDecide &&
+                    item.estado !== "Finalizado" &&
+                    item.estado !== "Rechazado" && (
+                      <>
+                        <button
+                          className="btn primary"
+                          onClick={() =>
+                            decidir(
+                              item.id,
+                              item.estado === "Aprobado por líder"
+                                ? "finalize"
+                                : "approve",
+                            )
+                          }
+                        >
+                          <CheckCircle2 size={14} />{" "}
+                          {item.estado === "Aprobado por líder"
+                            ? "Finalizar"
+                            : "Aprobar y firmar"}
+                        </button>
+                        <button
+                          className="btn"
+                          onClick={() => decidir(item.id, "reject")}
+                        >
+                          <XCircle size={14} /> Rechazar
+                        </button>
+                      </>
+                    )}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
 }
 
-function DatePair({form,setForm,a,b}:any){return <div className="row"><div className="field"><label>Desde</label><input className="input" type="date" value={form[a]||''} onChange={e=>setForm({...form,[a]:e.target.value})}/></div><div className="field"><label>Hasta</label><input className="input" type="date" value={form[b]||''} onChange={e=>setForm({...form,[b]:e.target.value})}/></div></div>}
+function DatePair({ form, setForm, a, b }: any) {
+  return (
+    <div className="row">
+      <div className="field">
+        <label>Desde</label>
+        <input
+          className="input"
+          type="date"
+          value={form[a] || ""}
+          onChange={(e) => setForm({ ...form, [a]: e.target.value })}
+        />
+      </div>
+      <div className="field">
+        <label>Hasta</label>
+        <input
+          className="input"
+          type="date"
+          value={form[b] || ""}
+          onChange={(e) => setForm({ ...form, [b]: e.target.value })}
+        />
+      </div>
+    </div>
+  );
+}
 
-function Field({label,set,textarea,...props}:any){return <div className="field"><label>{label}</label>{textarea?<textarea className="input" rows={3} {...props} onChange={e=>set(e.target.value)}/>:<input className="input" {...props} onChange={e=>set(e.target.value)}/>}</div>}
-function ReadField({label,value}:any){return <div className="readField"><span>{label}</span><b>{value||'—'}</b></div>}
-function SelectField({label,value,set,options=['Completo','Mañana','Tarde','Noche']}:any){return <div className="field"><label>{label}</label><select value={value} onChange={e=>set(e.target.value)}>{options.map((x:string)=><option key={x}>{x}</option>)}</select></div>}
-function daysBetween(a?:string,b?:string){if(!a||!b)return 'Pendiente';return String(Math.max(1,Math.round((new Date(b+'T12:00:00').getTime()-new Date(a+'T12:00:00').getTime())/86400000)+1))}
-function esc(value:any){return String(value??'—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]||c))}
-function printRequest(item:any,meta:any){const win=window.open('','_blank','width=950,height=950');if(!win)return alert('Permite ventanas emergentes para generar el formato.');const fields=item.tipo==='Solicitud de permiso'?[['FECHA DE SOLICITUD',meta.fechaSolicitud],['NOMBRE DEL AFILIADO(A) PARTÍCIPE',meta.solicitanteNombre],['NÚMERO DE DOCUMENTO',meta.documento],['ÁREA A LA QUE PERTENECE',meta.areaNombre],['PROCESO O FUNCIÓN',meta.proceso],['NOMBRE DEL LÍDER DE ÁREA',meta.liderNombre],['MOTIVO DE AUSENCIA',meta.motivo],['FECHA DE SALIDA',meta.fechaSalida],['FECHA DE REGRESO',meta.fechaRegreso],['TOTAL DÍAS',daysBetween(meta.fechaSalida,meta.fechaRegreso)]]:item.tipo==='Cambio de turno'?[['FECHA DE SOLICITUD',meta.fechaSolicitud],['AFILIADO(A) SOLICITANTE',meta.solicitanteNombre],['C.C.',meta.documento],['SERVICIO (ÁREA)',meta.areaNombre],['COBERTURA QUE ENTREGA',meta.turnoSolicita],['FECHA DE COBERTURA',meta.fechaCobertura],['AFILIADO(A) QUE ACEPTA',meta.nombreAcepta],['C.C. QUIEN ACEPTA',meta.documentoAcepta],['SERVICIO (ÁREA) QUIEN ACEPTA',meta.areaAcepta],['COBERTURA QUE RECIBE',meta.turnoAcepta],['FECHA DE DEVOLUCIÓN',meta.fechaDevolucion],['¿COBERTURA COMPENSADA?',meta.coberturaCompensada]]:[['FECHA DE SOLICITUD',meta.fechaSolicitud],['AFILIADO(A) PARTÍCIPE',meta.solicitanteNombre],['DOCUMENTO',meta.documento],['DESTINO',meta.destino],['OBJETO DEL VIAJE',meta.objeto],['SALIDA / REGRESO',`${meta.fechaSalida||'—'} / ${meta.fechaRegreso||'—'}`],['TRANSPORTE',cop(meta.transporte)],['ALOJAMIENTO',cop(meta.alojamiento)],['ALIMENTACIÓN',cop(meta.alimentacion)],['TOTAL ESTIMADO',cop(Number(meta.transporte||0)+Number(meta.alojamiento||0)+Number(meta.alimentacion||0))]];const signatures=(meta.historial||[]).map((h:any)=>`<div><b>${esc(h.estado)}</b><br>${esc(h.nombre)}<br><small>${esc(new Date(h.fecha).toLocaleString())}<br>Firma digital: ${esc(String(h.firma).slice(0,20))}…</small></div>`).join('');win.document.write(`<!doctype html><html><head><title>${esc(item.tipo)}</title><style>@page{size:letter;margin:14mm}body{font-family:Arial;color:#111}.head{display:grid;grid-template-columns:150px 1fr 170px;border:1px solid #222}.head>*{padding:12px;border-right:1px solid #222}.head img{width:110px}.head div{text-align:center}.head small{border:0}.title{font-size:18px;font-weight:800}.grid{margin-top:30px;border:1px solid #222}.f{display:grid;grid-template-columns:260px 1fr;border-bottom:1px solid #bbb;padding:11px}.f:last-child{border:0}.f b{font-size:12px}.sign{display:grid;grid-template-columns:repeat(3,1fr);gap:25px;margin-top:70px}.sign div{border-top:1px solid #222;padding-top:8px;min-height:70px}.foot{margin-top:45px;text-align:center;font-size:11px;font-weight:700}button{margin:20px 0;padding:10px 16px}@media print{button{display:none}}</style></head><body><div class="head"><div><img src="/logo.png"></div><div><b>ASOCIACIÓN GREMIAL SINDICAL DE PRESTACIONES DE SERVICIOS GENERALES Y DE SALUD DEL VALLE</b><br>NIT: 901.432.027-0<hr><span class="title">${esc(item.tipo.toUpperCase())}</span></div><small>CÓDIGO: ${item.tipo==='Solicitud de permiso'?'AD-FO-02':item.tipo==='Cambio de turno'?'AD-FO-04':'AD-FO-DIGITAL'}<br><br>VERSIÓN: 01<br><br>FECHA: ${esc(meta.fechaSolicitud)}</small></div><div class="grid">${fields.map(([k,v])=>`<div class="f"><b>${esc(k)}</b><span>${esc(v)}</span></div>`).join('')}</div><div class="sign">${signatures}</div><div class="foot">Dirección: Carrera 15 # 19 - 200, La Unión - Valle del Cauca<br>Documento generado y firmado electrónicamente en el Portal AGRESERGE</div><button onclick="window.print()">Guardar como PDF / imprimir</button></body></html>`);win.document.close()}
+function Field({ label, set, textarea, ...props }: any) {
+  return (
+    <div className="field">
+      <label>{label}</label>
+      {textarea ? (
+        <textarea
+          className="input"
+          rows={3}
+          {...props}
+          onChange={(e) => set(e.target.value)}
+        />
+      ) : (
+        <input
+          className="input"
+          {...props}
+          onChange={(e) => set(e.target.value)}
+        />
+      )}
+    </div>
+  );
+}
+function ReadField({ label, value }: any) {
+  return (
+    <div className="readField">
+      <span>{label}</span>
+      <b>{value || "—"}</b>
+    </div>
+  );
+}
+function SelectField({
+  label,
+  value,
+  set,
+  options = ["Completo", "Mañana", "Tarde", "Noche"],
+}: any) {
+  return (
+    <div className="field">
+      <label>{label}</label>
+      <select value={value} onChange={(e) => set(e.target.value)}>
+        {options.map((x: string) => (
+          <option key={x}>{x}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+function daysBetween(a?: string, b?: string) {
+  if (!a || !b) return "Pendiente";
+  return String(
+    Math.max(
+      1,
+      Math.round(
+        (new Date(b + "T12:00:00").getTime() -
+          new Date(a + "T12:00:00").getTime()) /
+          86400000,
+      ) + 1,
+    ),
+  );
+}
+function esc(value: any) {
+  return String(value ?? "—").replace(
+    /[&<>"']/g,
+    (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        c
+      ] || c,
+  );
+}
+function printRequest(item: any, meta: any) {
+  const win = window.open("", "_blank", "width=950,height=950");
+  if (!win)
+    return alert("Permite ventanas emergentes para generar el formato.");
+  const fields =
+    item.tipo === "Solicitud de permiso"
+      ? [
+          ["FECHA DE SOLICITUD", meta.fechaSolicitud],
+          ["NOMBRE DEL AFILIADO(A) PARTÍCIPE", meta.solicitanteNombre],
+          ["NÚMERO DE DOCUMENTO", meta.documento],
+          ["ÁREA A LA QUE PERTENECE", meta.areaNombre],
+          ["PROCESO O FUNCIÓN", meta.proceso],
+          ["NOMBRE DEL LÍDER DE ÁREA", meta.liderNombre],
+          ["MOTIVO DE AUSENCIA", meta.motivo],
+          ["FECHA DE SALIDA", meta.fechaSalida],
+          ["FECHA DE REGRESO", meta.fechaRegreso],
+          ["TOTAL DÍAS", daysBetween(meta.fechaSalida, meta.fechaRegreso)],
+        ]
+      : item.tipo === "Cambio de turno"
+        ? [
+            ["FECHA DE SOLICITUD", meta.fechaSolicitud],
+            ["AFILIADO(A) SOLICITANTE", meta.solicitanteNombre],
+            ["C.C.", meta.documento],
+            ["SERVICIO (ÁREA)", meta.areaNombre],
+            ["COBERTURA QUE ENTREGA", meta.turnoSolicita],
+            ["FECHA DE COBERTURA", meta.fechaCobertura],
+            ["AFILIADO(A) QUE ACEPTA", meta.nombreAcepta],
+            ["C.C. QUIEN ACEPTA", meta.documentoAcepta],
+            ["SERVICIO (ÁREA) QUIEN ACEPTA", meta.areaAcepta],
+            ["COBERTURA QUE RECIBE", meta.turnoAcepta],
+            ["FECHA DE DEVOLUCIÓN", meta.fechaDevolucion],
+            ["¿COBERTURA COMPENSADA?", meta.coberturaCompensada],
+          ]
+        : [
+            ["FECHA DE SOLICITUD", meta.fechaSolicitud],
+            ["AFILIADO(A) PARTÍCIPE", meta.solicitanteNombre],
+            ["DOCUMENTO", meta.documento],
+            ["DESTINO", meta.destino],
+            ["OBJETO DEL VIAJE", meta.objeto],
+            [
+              "SALIDA / REGRESO",
+              `${meta.fechaSalida || "—"} / ${meta.fechaRegreso || "—"}`,
+            ],
+            ["TRANSPORTE", cop(meta.transporte)],
+            ["ALOJAMIENTO", cop(meta.alojamiento)],
+            ["ALIMENTACIÓN", cop(meta.alimentacion)],
+            [
+              "TOTAL ESTIMADO",
+              cop(
+                Number(meta.transporte || 0) +
+                  Number(meta.alojamiento || 0) +
+                  Number(meta.alimentacion || 0),
+              ),
+            ],
+          ];
+  const signatures = (meta.historial || [])
+    .map(
+      (h: any) =>
+        `<div><b>${esc(h.estado)}</b><br>${esc(h.nombre)}<br><small>${esc(new Date(h.fecha).toLocaleString())}<br>Firma digital: ${esc(String(h.firma).slice(0, 20))}…</small></div>`,
+    )
+    .join("");
+  win.document.write(
+    `<!doctype html><html><head><title>${esc(item.tipo)}</title><style>@page{size:letter;margin:14mm}body{font-family:Arial;color:#111}.head{display:grid;grid-template-columns:150px 1fr 170px;border:1px solid #222}.head>*{padding:12px;border-right:1px solid #222}.head img{width:110px}.head div{text-align:center}.head small{border:0}.title{font-size:18px;font-weight:800}.grid{margin-top:30px;border:1px solid #222}.f{display:grid;grid-template-columns:260px 1fr;border-bottom:1px solid #bbb;padding:11px}.f:last-child{border:0}.f b{font-size:12px}.sign{display:grid;grid-template-columns:repeat(3,1fr);gap:25px;margin-top:70px}.sign div{border-top:1px solid #222;padding-top:8px;min-height:70px}.foot{margin-top:45px;text-align:center;font-size:11px;font-weight:700}button{margin:20px 0;padding:10px 16px}@media print{button{display:none}}</style></head><body><div class="head"><div><img src="/logo.png"></div><div><b>ASOCIACIÓN GREMIAL SINDICAL DE PRESTACIONES DE SERVICIOS GENERALES Y DE SALUD DEL VALLE</b><br>NIT: 901.432.027-0<hr><span class="title">${esc(item.tipo.toUpperCase())}</span></div><small>CÓDIGO: ${item.tipo === "Solicitud de permiso" ? "AD-FO-02" : item.tipo === "Cambio de turno" ? "AD-FO-04" : "AD-FO-DIGITAL"}<br><br>VERSIÓN: 01<br><br>FECHA: ${esc(meta.fechaSolicitud)}</small></div><div class="grid">${fields.map(([k, v]) => `<div class="f"><b>${esc(k)}</b><span>${esc(v)}</span></div>`).join("")}</div><div class="sign">${signatures}</div><div class="foot">Dirección: Carrera 15 # 19 - 200, La Unión - Valle del Cauca<br>Documento generado y firmado electrónicamente en el Portal AGRESERGE</div><button onclick="window.print()">Guardar como PDF / imprimir</button></body></html>`,
+  );
+  win.document.close();
+}
