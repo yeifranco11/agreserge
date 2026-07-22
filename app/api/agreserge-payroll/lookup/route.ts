@@ -19,7 +19,24 @@ export async function POST(request: Request) {
         { status: 403 },
       );
     const body = await request.json();
-    const ownDocument = db.perfiles?.[userId]?.documento;
+    const normalizeName = (value: string) =>
+      String(value || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .toUpperCase();
+    const linkedIdentity =
+      actor.rol === "Agremiado"
+        ? db.usuarios.find(
+            (candidate: any) =>
+              candidate.id !== userId &&
+              candidate.rol === "Agremiado" &&
+              normalizeName(candidate.nombre) === normalizeName(actor.nombre) &&
+              db.perfiles?.[candidate.id]?.documento,
+          )
+        : null;
+    const ownDocument = db.perfiles?.[linkedIdentity?.id || userId]?.documento;
     const documento = String(
       actor.rol === "Agremiado" ? ownDocument : body.documento || "",
     ).replace(/\D/g, "");
