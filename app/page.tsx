@@ -1826,7 +1826,107 @@ function MisAgremiados({ db, session }: any) {
     </div>
   );
 }
-function Informes({ db, save, session }: any) {
+function Informes({ db, session }: any) {
+  const [data, setData] = useState<any>({ periods: [], submissions: [] });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const load = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch("/api/agreserge-reports?scope=mine", { cache: "no-store" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error);
+      setData(payload);
+    } catch (e: any) {
+      setError(e.message || "No se pudieron cargar sus informes");
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => { load(); }, []);
+  const upload = async (id: string, file?: File) => {
+    if (!file) return;
+    setLoading(true);
+    try {
+      const body = new FormData();
+      body.append("id", id);
+      body.append("file", file);
+      const response = await fetch("/api/agreserge-reports/upload", { method: "POST", body });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error);
+      await load();
+      alert("Informe guardado correctamente en su carpeta de Google Drive.");
+    } catch (e: any) {
+      setError(e.message || "No se pudo cargar el informe");
+      alert(e.message || "No se pudo cargar el informe");
+    } finally {
+      setLoading(false);
+    }
+  };
+  const periodById = (id: string) => data.periods.find((period: any) => period.id === id);
+  return (
+    <div className="grid reportWorkspace">
+      <div className="card span12 reportHero">
+        <div>
+          <span className="badge">MIS RESPONSABILIDADES</span>
+          <h2>Informes de actividades</h2>
+          <p className="muted">
+            Aquí aparecen exclusivamente los anexos y subinformes asignados a {session.nombre}.
+          </p>
+        </div>
+        <span className={`pill ${error ? "bad" : "ok"}`}>{error || (loading ? "Sincronizando…" : `${data.submissions.length} asignaciones`)}</span>
+      </div>
+      <div className="card span12">
+        <div className="assignmentStack">
+          {data.submissions.map((item: any) => {
+            const period = periodById(item.period_id);
+            return (
+              <article className={`assignmentLine ${item.parent_id ? "subreport" : ""}`} key={item.id}>
+                <div className="assignmentOrder">{item.parent_id ? "↳" : item.obligation?.numero || "•"}</div>
+                <div className="assignmentInfo">
+                  <b>{item.parent_id ? "Subinforme" : `Anexo ${item.annex?.numero || "—"}`} · {item.titulo}</b>
+                  <span>
+                    Obligación {item.obligation?.numero || "—"} · {period?.mes || "Periodo"} {period?.anio || ""}
+                    {" · "}{item.estado}
+                  </span>
+                  {item.drive_file_url && (
+                    <a href={item.drive_file_url} target="_blank" rel="noreferrer" className="link">
+                      <LinkIcon size={14} /> Abrir y diligenciar formato asignado
+                    </a>
+                  )}
+                  {item.drive_folder_url && (
+                    <a href={item.drive_folder_url} target="_blank" rel="noreferrer" className="link">
+                      <FolderKanban size={14} /> Abrir carpeta del anexo
+                    </a>
+                  )}
+                </div>
+                <label className="reportUpload">
+                  <span>{item.archivo_nombre ? `Reemplazar ${item.archivo_nombre}` : "Cargar informe o soporte"}</span>
+                  <input
+                    type="file"
+                    accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
+                    disabled={loading}
+                    onChange={(e) => upload(item.id, e.target.files?.[0])}
+                  />
+                </label>
+              </article>
+            );
+          })}
+          {!loading && !data.submissions.length && (
+            <div className="emptyState">
+              <FileText size={42} />
+              <b>No tiene informes asignados</b>
+              <span>Cuando un coordinador le asigne un anexo o subinforme, aparecerá aquí automáticamente.</span>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InformesLegacy({ db, save, session }: any) {
   const limited = [
     "Líder Institucional",
     "Líder de Proceso",
@@ -2090,6 +2190,16 @@ function AsignacionMensual({ db, session }: any) {
   const visibleSubmissions = selectedPeriod
     ? data.submissions.filter((item: any) => item.period_id === selectedPeriod.id)
     : data.submissions;
+  const assignableUsers = db.usuarios.filter((user: Usuario) =>
+    user.activo && [
+      "Administrador de Sistemas", "Coordinación AGRESERGE", "Coordinación General",
+      "Coordinador General", "Director Ejecutivo", "Coordinadora Administrativa y Financiera",
+      "Coordinación Administrativa", "Coordinación Asistencial",
+      "Coordinador de Proceso AGRESERGE", "Líder Institucional", "Líder de Proceso",
+      "Asesora de Calidad", "Seguridad y Salud en el Trabajo", "Talento Humano",
+      "Experiencia al Agremiado", "Tesorería",
+    ].includes(user.rol),
+  );
   return (
     <div className="grid reportWorkspace">
       <div className="card span12 reportHero">
@@ -2117,6 +2227,69 @@ function AsignacionMensual({ db, session }: any) {
             <button className="btn" disabled={loading} onClick={bootstrap}>Parametrizar HGC y crear líderes</button>
             <button className="btn primary" disabled={loading} onClick={open}>Abrir mes y crear carpetas</button>
             <button className="btn danger" disabled={loading} onClick={reset}>Reiniciar meses abiertos</button>
+          </div>
+        </div>
+      )}
+      {isManager && data.obligations.length > 0 && (
+        <div className="card span12">
+          <div className="sectionTitleRow">
+            <div>
+              <span className="badge">PARAMETRIZACIÓN MANUAL</span>
+              <h3>Responsable de cada anexo por obligación contractual</h3>
+              <p className="muted">
+                Esta asignación se utiliza al abrir el siguiente mes. Cada líder verá únicamente
+                los anexos que tenga asignados.
+              </p>
+            </div>
+          </div>
+          <div className="obligationAssignmentList">
+            {data.obligations.map((obligation: any) => {
+              const annexes = data.annexes.filter((annex: any) => annex.obligation_id === obligation.id);
+              return (
+                <section className="obligationAssignmentCard" key={obligation.id}>
+                  <div className="obligationHeading">
+                    <span className="assignmentOrder">{obligation.numero}</span>
+                    <div>
+                      <b>Obligación contractual {obligation.numero}</b>
+                      <p>{obligation.titulo}</p>
+                    </div>
+                  </div>
+                  {annexes.length ? (
+                    <div className="annexAssignmentRows">
+                      {annexes.map((annex: any) => (
+                        <div className="annexAssignmentRow" key={annex.id}>
+                          <div>
+                            <b>Anexo {annex.numero}</b>
+                            <span>{annex.titulo}</span>
+                          </div>
+                          <label>
+                            <span>Responsable</span>
+                            <select
+                              value={annex.responsable_id || ""}
+                              disabled={loading}
+                              onChange={(e) => action({
+                                action: "assign-annex",
+                                annexId: annex.id,
+                                responsableId: e.target.value,
+                              })}
+                            >
+                              <option value="">Seleccionar responsable</option>
+                              {assignableUsers.map((user: Usuario) => (
+                                <option key={user.id} value={user.id}>
+                                  {user.nombre} · {user.rol}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mini">Esta obligación lleva portada y soportes, sin anexo numerado.</p>
+                  )}
+                </section>
+              );
+            })}
           </div>
         </div>
       )}

@@ -27,10 +27,20 @@ export async function POST(request: Request) {
       const template = driveTemplate(Number(item.anexo));
       const responsable = db.usuarios.find((user: any) => user.id === item.responsableId && user.activo);
       if (!template || !responsable) throw new Error(`Asignación inválida para el formato #${item.anexo}`);
-      return { anexo: template.anexo, responsableId: responsable.id, responsableNombre: responsable.nombre };
+      return {
+        obligacion: template.anexo,
+        anexo: template.anexo,
+        titulo: `ACTIVIDADES CONTRATADAS #${template.anexo}`,
+        responsableId: responsable.id,
+        responsableNombre: responsable.nombre,
+      };
     });
 
-    const drive = await openDrivePeriod({ mes, anio: String(anio), assignments: normalized });
+    const obligations = normalized.map((item: any) => ({
+      obligacion: item.anexo,
+      titulo: `ACTIVIDADES CONTRATADAS #${item.anexo}`,
+    }));
+    const drive = await openDrivePeriod({ mes, anio: String(anio), obligations, assignments: normalized });
     const rows = drive.items.map((item: any) => ({
       id: randomUUID(), anexo: item.anexo, titulo: `ACTIVIDADES CONTRATADAS #${item.anexo}`,
       tipo: 'Administrativo', responsable_id: item.responsableId, coordinador_id: actor.id,
