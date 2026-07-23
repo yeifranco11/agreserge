@@ -2171,6 +2171,10 @@ textarea:focus {
   font-size: 11px;
   margin-top: 3px;
 }
+
+.reportWorkspace{align-items:start}.reportHero{display:flex;align-items:center;justify-content:space-between;gap:24px;background:linear-gradient(135deg,#f8fbff,#e6f3ff)}.reportHero h2{font-size:clamp(28px,4vw,48px);margin:10px 0}.reportToolbar{display:grid;grid-template-columns:2fr 1fr .8fr 1.2fr;gap:14px;align-items:end}.periodStack,.assignmentStack{display:flex;flex-direction:column;gap:12px}.periodCard{display:flex;flex-direction:column;gap:9px;padding:16px;border:1px solid #d9e7f5;border-radius:18px;background:#f8fbff}.assignmentLine{display:grid;grid-template-columns:48px minmax(0,1fr) minmax(210px,auto);gap:14px;align-items:center;padding:15px;border:1px solid #d9e7f5;border-radius:16px;background:white}.assignmentLine.subreport{margin-left:32px;background:#f7fbff;border-left:4px solid #4c9de8}.assignmentOrder{display:grid;place-items:center;width:42px;height:42px;border-radius:13px;background:#e8f3ff;color:#0758a4;font-weight:900}.assignmentInfo{display:flex;flex-direction:column;gap:5px;min-width:0}.assignmentInfo span{color:#64758b;font-size:13px}.assignmentActions{display:flex;gap:8px;align-items:center}.assignmentActions select{max-width:240px}.orderInput{width:72px!important;min-width:72px}.reportUpload{display:flex;align-items:center;gap:10px;margin-top:5px;padding:8px 10px;border:1px dashed #a9c8e8;border-radius:11px;background:#f5faff;color:#0758a4;font-size:12px;font-weight:800;cursor:pointer}.reportUpload input{max-width:210px;font-size:11px}
+@media(max-width:900px){.reportHero{align-items:flex-start;flex-direction:column}.reportToolbar{grid-template-columns:1fr 1fr}.assignmentLine{grid-template-columns:42px 1fr}.assignmentActions{grid-column:1/-1;flex-direction:column;align-items:stretch}.assignmentActions select{max-width:none}.assignmentLine.subreport{margin-left:10px}}
+@media(max-width:600px){.reportToolbar{grid-template-columns:1fr}.assignmentLine{padding:12px}.reportWorkspace .span4,.reportWorkspace .span8{grid-column:span 12}}
 .payrollPeriodCard {
   background: linear-gradient(135deg, #fff, #eef7ff);
 }

@@ -77,6 +77,7 @@ type EstadoDoc =
 type Usuario = {
   id: string;
   nombre: string;
+  usuario?: string;
   correo: string;
   clave: string;
   rol: Rol;
@@ -2005,7 +2006,179 @@ function Informes({ db, save, session }: any) {
     </div>
   );
 }
-function AsignacionMensual({ db, save, session }: any) {
+function AsignacionMensual({ db, session }: any) {
+  const [data, setData] = useState<any>({ periods: [], obligations: [], annexes: [], submissions: [] });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [form, setForm] = useState({ entidadId: "hgc", mes: meses[new Date().getMonth()], anio: String(new Date().getFullYear()), fechaLimite: "" });
+  const managers = [
+    "Administrador de Sistemas", "Coordinación AGRESERGE", "Coordinación General",
+    "Coordinador General", "Director Ejecutivo", "Coordinadora Administrativa y Financiera",
+    "Coordinación Administrativa", "Coordinación Asistencial",
+  ];
+  const isManager = managers.includes(session.rol);
+  const load = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch("/api/agreserge-reports", { cache: "no-store" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error);
+      setData(payload);
+    } catch (e: any) {
+      setError(e.message || "No se pudieron cargar los informes");
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => { load(); }, []);
+  const action = async (body: any, message?: string) => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch("/api/agreserge-reports", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error);
+      if (message) alert(message);
+      await load();
+      return payload;
+    } catch (e: any) {
+      setError(e.message || "No se pudo completar la acción");
+      alert(e.message || "No se pudo completar la acción");
+    } finally {
+      setLoading(false);
+    }
+  };
+  const bootstrap = () => action({ action: "bootstrap-hgc" }, "Hospital Gonzalo Contreras parametrizado con 24 obligaciones, 27 anexos y líderes.");
+  const reset = () => {
+    if (confirm("Se eliminará el historial de meses abiertos del Hospital Gonzalo Contreras. Las cuentas y la parametrización se conservarán. ¿Continuar?"))
+      action({ action: "reset-periods", entidadId: form.entidadId }, "Periodos anteriores eliminados. Puede comenzar desde cero.");
+  };
+  const open = async () => {
+    if (!form.mes || !form.anio) return alert("Seleccione mes y año.");
+    const payload = await action({ action: "open-period", ...form });
+    if (payload?.folderUrl) window.open(payload.folderUrl, "_blank", "noopener,noreferrer");
+  };
+  const close = async (periodId: string) => {
+    if (!confirm("¿Cerrar el mes y generar el informe consolidado editable?")) return;
+    const payload = await action({ action: "close-period", periodId });
+    if (payload?.url) window.open(payload.url, "_blank", "noopener,noreferrer");
+  };
+  const upload = async (id: string, file?: File) => {
+    if (!file) return;
+    setLoading(true);
+    setError("");
+    try {
+      const body = new FormData();
+      body.append("id", id);
+      body.append("file", file);
+      const response = await fetch("/api/agreserge-reports/upload", { method: "POST", body });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error);
+      await load();
+      alert("Informe cargado y guardado en la carpeta correcta de Google Drive.");
+    } catch (e: any) {
+      setError(e.message || "No se pudo cargar el archivo");
+      alert(e.message || "No se pudo cargar el archivo");
+    } finally {
+      setLoading(false);
+    }
+  };
+  const selectedPeriod = data.periods[0];
+  const visibleSubmissions = selectedPeriod
+    ? data.submissions.filter((item: any) => item.period_id === selectedPeriod.id)
+    : data.submissions;
+  return (
+    <div className="grid reportWorkspace">
+      <div className="card span12 reportHero">
+        <div>
+          <span className="badge">INFORMES MENSUALES POR HOSPITAL</span>
+          <h2>Centro de ejecución contractual</h2>
+          <p className="muted">24 obligaciones, 27 anexos, delegación por líder, orden controlado, carpetas de Drive y cierre consolidado editable.</p>
+        </div>
+        <span className={`pill ${error ? "bad" : "ok"}`}>{error || (loading ? "Sincronizando…" : "Base de informes conectada")}</span>
+      </div>
+      {isManager && (
+        <div className="card span12">
+          <div className="reportToolbar">
+            <div className="field">
+              <label>Hospital o entidad</label>
+              <select value={form.entidadId} onChange={(e) => setForm({ ...form, entidadId: e.target.value })}>
+                {db.entidades.map((entity: Entidad) => <option key={entity.id} value={entity.id}>{entity.nombre}</option>)}
+              </select>
+            </div>
+            <div className="field"><label>Mes</label><select value={form.mes} onChange={(e) => setForm({ ...form, mes: e.target.value })}>{meses.map((month) => <option key={month}>{month}</option>)}</select></div>
+            <div className="field"><label>Año</label><input className="input" value={form.anio} onChange={(e) => setForm({ ...form, anio: e.target.value.replace(/\D/g, "").slice(0, 4) })} /></div>
+            <div className="field"><label>Fecha límite</label><input className="input" type="date" value={form.fechaLimite} onChange={(e) => setForm({ ...form, fechaLimite: e.target.value })} /></div>
+          </div>
+          <div className="row">
+            <button className="btn" disabled={loading} onClick={bootstrap}>Parametrizar HGC y crear líderes</button>
+            <button className="btn primary" disabled={loading} onClick={open}>Abrir mes y crear carpetas</button>
+            <button className="btn danger" disabled={loading} onClick={reset}>Reiniciar meses abiertos</button>
+          </div>
+        </div>
+      )}
+      <div className="card span4">
+        <h3>Historial mensual</h3>
+        <div className="periodStack">
+          {data.periods.map((period: any) => (
+            <div className="periodCard" key={period.id}>
+              <b>{period.entity?.nombre || "Hospital"}</b>
+              <span>{period.mes} {period.anio}</span>
+              <span className={`pill ${period.estado === "Cerrado" ? "ok" : "warn"}`}>{period.estado}</span>
+              <div className="row">
+                {period.drive_folder_url && <a className="btn" href={period.drive_folder_url} target="_blank">Carpeta Drive</a>}
+                {period.estado !== "Cerrado" && isManager && <button className="btn primary" onClick={() => close(period.id)}>Cerrar y consolidar</button>}
+                {period.consolidated_doc_url && <a className="btn primary" href={period.consolidated_doc_url} target="_blank">Informe editable</a>}
+              </div>
+            </div>
+          ))}
+          {!data.periods.length && <p className="muted">No hay meses abiertos. Parametrice HGC y abra el primer periodo.</p>}
+        </div>
+      </div>
+      <div className="card span8">
+        <h3>{isManager ? "Obligaciones, anexos y responsables" : "Mis anexos asignados"}</h3>
+        <p className="muted">Cada persona visualiza únicamente los informes que le fueron asignados. Los subinformes mantienen el orden definido por su coordinador.</p>
+        <div className="assignmentStack">
+          {visibleSubmissions.map((item: any) => {
+            const responsible = db.usuarios.find((user: Usuario) => user.id === item.responsable_id);
+            const canDelegate = isManager || item.responsable_id === session.id;
+            return (
+              <article className={`assignmentLine ${item.parent_id ? "subreport" : ""}`} key={item.id}>
+                <div className="assignmentOrder">{item.parent_id ? "↳" : item.obligation?.numero || "•"}</div>
+                <div className="assignmentInfo">
+                  <b>{item.titulo}</b>
+                  <span>{responsible?.nombre || "Sin responsable"} · {item.estado}</span>
+                  {item.drive_file_url && <a href={item.drive_file_url} target="_blank" className="link">Abrir y diligenciar en Drive</a>}
+                  {(item.responsable_id === session.id || isManager) && (
+                    <label className="reportUpload">
+                      <span>Cargar PDF, Word, Excel o imagen</span>
+                      <input type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png" onChange={(e) => upload(item.id, e.target.files?.[0])} />
+                    </label>
+                  )}
+                </div>
+                {canDelegate && (
+                  <div className="assignmentActions">
+                    <select value={item.responsable_id || ""} onChange={(e) => action({ action: "delegate", id: item.id, responsableId: e.target.value })}>
+                      <option value="">Asignar responsable</option>
+                      {db.usuarios.filter((user: Usuario) => user.activo && user.entidadId === "hgc").map((user: Usuario) => <option key={user.id} value={user.id}>{user.nombre}</option>)}
+                    </select>
+                    <input className="input orderInput" type="number" value={item.orden} onChange={(e) => action({ action: "reorder", id: item.id, orden: e.target.value })} aria-label="Orden" />
+                  </div>
+                )}
+              </article>
+            );
+          })}
+          {!visibleSubmissions.length && <p className="muted">Todavía no hay anexos asignados para este periodo.</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AsignacionMensualLegacy({ db, save, session }: any) {
   const [f, setF] = useState<any>({
     mes: "Enero",
     anio: "2026",
@@ -2555,8 +2728,9 @@ function Usuarios({ db, save }: any) {
     activo: true,
   });
   const add = () => {
-    if (!p.nombre || !p.correo) return alert("Digite nombre y correo");
-    const nuevo = { id: uid(), clave: p.clave || "1234", ...p };
+    if (!p.nombre || !p.usuario || !p.correo)
+      return alert("Digite nombre, usuario y correo");
+    const nuevo = { id: uid(), clave: p.clave || "Cambiar2026!", ...p };
     let docs = db.documentos;
     if (nuevo.rol === "Agremiado")
       docs = { ...docs, [nuevo.id]: soportes(nuevo.tipo, nuevo.id) };
@@ -2566,7 +2740,9 @@ function Usuarios({ db, save }: any) {
     );
   };
   const reset = (u: Usuario) => {
-    const clave = prompt("Nueva clave para " + u.nombre, "1234") || "1234";
+    const clave = prompt("Nueva contraseña para " + u.nombre);
+    if (!clave || clave.length < 8)
+      return alert("La contraseña debe tener al menos 8 caracteres.");
     save(
       {
         ...db,
@@ -2575,6 +2751,25 @@ function Usuarios({ db, save }: any) {
         ),
       },
       `Clave actualizada: ${u.nombre}`,
+    );
+  };
+  const edit = (u: Usuario) => {
+    const nombre = prompt("Nombre completo", u.nombre)?.trim();
+    if (!nombre) return;
+    const usuario = prompt("Nombre de usuario", u.usuario || u.correo)?.trim().toLowerCase();
+    if (!usuario) return;
+    const correo = prompt("Correo electrónico", u.correo)?.trim().toLowerCase();
+    if (!correo) return;
+    if (db.usuarios.some((x: Usuario) => x.id !== u.id && (x.usuario === usuario || x.correo === correo)))
+      return alert("El usuario o el correo ya está registrado.");
+    save(
+      {
+        ...db,
+        usuarios: db.usuarios.map((x: Usuario) =>
+          x.id === u.id ? { ...x, nombre, usuario, correo } : x,
+        ),
+      },
+      `Datos de acceso actualizados: ${nombre}`,
     );
   };
   return (
@@ -2588,6 +2783,11 @@ function Usuarios({ db, save }: any) {
         />
         <input
           className="input"
+          placeholder="Nombre de usuario"
+          onChange={(e) => setP({ ...p, usuario: e.target.value.toLowerCase().replace(/\s+/g, ".") })}
+        />
+        <input
+          className="input"
           placeholder="Correo"
           onChange={(e) => setP({ ...p, correo: e.target.value })}
         />
@@ -2596,6 +2796,16 @@ function Usuarios({ db, save }: any) {
           placeholder="Área o servicio"
           onChange={(e) => setP({ ...p, cargo: e.target.value })}
         />
+        <input
+          className="input"
+          type="password"
+          placeholder="Contraseña inicial (mínimo 8)"
+          onChange={(e) => setP({ ...p, clave: e.target.value })}
+        />
+        <select onChange={(e) => setP({ ...p, entidadId: e.target.value })}>
+          <option value="">Seleccione hospital o entidad</option>
+          {db.entidades.map((entidad: Entidad) => <option key={entidad.id} value={entidad.id}>{entidad.nombre}</option>)}
+        </select>
         <select onChange={(e) => setP({ ...p, rol: e.target.value })}>
           {roles.map((r) => (
             <option key={r}>{r}</option>
@@ -2618,7 +2828,7 @@ function Usuarios({ db, save }: any) {
                 <td>
                   <b>{u.nombre}</b>
                   <br />
-                  <span className="mini">{u.correo}</span>
+                  <span className="mini">@{u.usuario || u.correo} · {u.correo}</span>
                 </td>
                 <td>{u.rol}</td>
                 <td>
@@ -2627,6 +2837,9 @@ function Usuarios({ db, save }: any) {
                   </span>
                 </td>
                 <td>
+                  <button className="btn" onClick={() => edit(u)}>
+                    Editar acceso
+                  </button>
                   <button className="btn" onClick={() => reset(u)}>
                     <KeyRound size={14} /> Cambiar clave
                   </button>

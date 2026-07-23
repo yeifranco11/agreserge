@@ -12,15 +12,15 @@ export async function POST(request: Request) {
     await ensureSeeded();
 
     const supabase = requireSupabaseAdmin();
-    const { data: user, error } = await supabase
+    const { data: users, error } = await supabase
       .from('agreserge_users')
       .select('*')
-      .ilike('correo', login)
       .eq('activo', true)
-      .maybeSingle();
+      .or(`correo.ilike.${login},usuario.ilike.${login}`)
+      .limit(1);
 
     if (error) throw error;
-    const foundUser = user as any;
+    const foundUser = (users as any[])?.[0];
     if (!foundUser || !verifyPassword(String(clave || ''), foundUser.clave_hash)) {
       return NextResponse.json({ error: 'Usuario, clave o perfil inactivo' }, { status: 401 });
     }

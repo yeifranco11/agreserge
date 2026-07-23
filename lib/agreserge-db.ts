@@ -94,6 +94,7 @@ function userFromRow(row: any) {
   return {
     id: row.id,
     nombre: row.nombre,
+    usuario: row.usuario ?? row.correo,
     correo: row.correo,
     clave: '',
     rol: row.rol,
@@ -295,6 +296,7 @@ export async function saveFullDB(db: any, options: { force?: boolean; actor?: an
   const userRows = (db.usuarios ?? []).map((user: any) => ({
     id: user.id,
     nombre: user.nombre,
+    usuario: user.usuario || user.correo,
     correo: user.correo,
     clave_hash: user.clave ? hashPassword(user.clave) : storedHashes.get(user.id) ?? null,
     rol: user.rol,
