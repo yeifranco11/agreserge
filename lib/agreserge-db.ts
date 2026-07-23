@@ -1,24 +1,54 @@
 import { hashPassword } from './agreserge-auth';
 import { canAdmin } from './agreserge-permissions';
 import { requireSupabaseAdmin } from './supabase-admin';
-
-const docsAdministrativo = ['Cédula de ciudadanía al 150%','Foto fondo blanco para carnet','Hoja de vida función pública','Diplomas y actas de grado','RUT actualizado','Antecedentes judiciales','Antecedentes fiscales','Antecedentes disciplinarios','Medidas correctivas','REDAM','Certificaciones laborales','Tratamiento de datos personales','Confidencialidad','Certificación bancaria','Certificación EPS','Fondo de pensiones','ARL','Caja de compensación','Examen médico laboral','Contrato o vinculación administrativa'];
-const docsAsistencial = ['Cédula de ciudadanía al 150%','Foto fondo blanco para carnet','Hoja de vida función pública','Diplomas y actas de grado','Tarjeta profesional','RETHUS actualizado','Póliza de responsabilidad civil','Cursos obligatorios asistenciales','Carnet de vacunas','RUT actualizado','Antecedentes judiciales','Antecedentes fiscales','Antecedentes disciplinarios','Medidas correctivas','REDAM','Certificación bancaria','Certificación EPS','Fondo de pensiones','ARL','Caja de compensación','Examen médico laboral','Contrato o vinculación asistencial'];
+import { documentRequirements } from './document-requirements';
 
 export const defaultPermissions: Record<string, string[]> = {
-  'Agremiado':['Ficha técnica','Cargue documental','Trámites administrativos','AGREBOT'],
-  'Líder Institucional':['Inicio','Mis agremiados','Informes de actividades','AGREBOT'],
+  'Agremiado':['Ficha técnica','Cargue documental','Nómina y comprobantes','Solicitudes y firmas','Trámites administrativos','AGREBOT'],
+  'Líder Institucional':['Inicio','Mis agremiados','Informes de actividades','Solicitudes y firmas','AGREBOT'],
+  'Líder de Proceso':['Inicio','Mis agremiados','Informes de actividades','Solicitudes y firmas','AGREBOT'],
+  'Coordinadora':['Inicio','Dashboard gerente','Ficha técnica','Informes de actividades','Asignación mensual','AGREBOT','Auditoría'],
+  'Coordinación AGRESERGE':['Inicio','Dashboard gerente','Revisión documental','Informes de actividades','Asignación mensual','Ficha técnica','AGREBOT','Auditoría'],
+  'Coordinación Administrativa':['Inicio','Dashboard gerente','Ficha técnica','Informes de actividades','Asignación mensual','Nómina y comprobantes','Solicitudes y firmas','Trámites administrativos','AGREBOT','Auditoría'],
+  'Coordinación Asistencial':['Inicio','Dashboard gerente','Ficha técnica','Revisión documental','Mis agremiados','Informes de actividades','Solicitudes y firmas','AGREBOT','Auditoría'],
+  'Tesorería':['Inicio','Dashboard gerente','Nómina y comprobantes','Trámites administrativos','Informes de actividades','AGREBOT','Auditoría'],
+  'Coordinación General':['Inicio','Dashboard gerente','Parámetros institucionales','Ficha técnica','Revisión documental','Informes de actividades','Asignación mensual','Usuarios y claves','AGREBOT','Auditoría'],
+  'Coordinador de Sede':['Inicio','Dashboard gerente','Ficha técnica','Mis agremiados','Informes de actividades','Solicitudes y firmas','AGREBOT','Auditoría'],
   'Coordinador de Proceso AGRESERGE':['Inicio','Informes de actividades','Asignación mensual','AGREBOT','Auditoría'],
   'Coordinador General':['Inicio','Dashboard gerente','Revisión documental','Informes de actividades','Asignación mensual','Usuarios y claves','AGREBOT','Auditoría'],
-  'Coordinadora Administrativa y Financiera':['Inicio','Dashboard gerente','Informes de actividades','Asignación mensual','Trámites administrativos','Auditoría','AGREBOT'],
+  'Coordinadora Administrativa y Financiera':['Inicio','Dashboard gerente','Informes de actividades','Asignación mensual','Nómina y comprobantes','Solicitudes y firmas','Trámites administrativos','Auditoría','AGREBOT'],
   'Talento Humano':['Inicio','Parámetros institucionales','Usuarios y claves','Ficha técnica','AGREBOT'],
   'Experiencia al Agremiado':['Inicio','Usuarios y claves','Ficha técnica','AGREBOT'],
-  'Administrador de Sistemas':['Inicio','Parámetros institucionales','Permisos por perfil','Usuarios y claves','Auditoría'],
+  'Asesora de Calidad':['Inicio','Dashboard gerente','Ficha técnica','Revisión documental','Informes de actividades','AGREBOT','Auditoría'],
+  'Director Ejecutivo':['Inicio','Dashboard gerente','Parámetros institucionales','Ficha técnica','Revisión documental','Informes de actividades','Asignación mensual','Usuarios y claves','AGREBOT','Auditoría'],
+  'Seguridad y Salud en el Trabajo':['Inicio','Dashboard gerente','Ficha técnica','Revisión documental','Informes de actividades','AGREBOT','Auditoría'],
+  'Administrador de Sistemas':['Inicio','Dashboard gerente','Parámetros institucionales','Ficha técnica','Cargue documental','Revisión documental','Mis agremiados','Informes de actividades','Asignación mensual','Nómina y comprobantes','Solicitudes y firmas','Trámites administrativos','Permisos por perfil','Usuarios y claves','AGREBOT','Auditoría'],
   'Gerente':['Inicio','Dashboard gerente','Informes de actividades','Auditoría','AGREBOT'],
 };
 
+const requiredOperationalModules: Record<string, string[]> = {
+  'Agremiado': ['Nómina y comprobantes', 'Solicitudes y firmas'],
+  'Líder Institucional': ['Solicitudes y firmas'],
+  'Líder de Proceso': ['Solicitudes y firmas'],
+  'Coordinadora': ['Ficha técnica', 'Informes de actividades', 'AGREBOT'],
+  'Coordinación AGRESERGE': ['Ficha técnica', 'Informes de actividades', 'AGREBOT'],
+  'Coordinación Administrativa': ['Ficha técnica', 'Nómina y comprobantes', 'Solicitudes y firmas'],
+  'Coordinación Asistencial': ['Ficha técnica', 'Revisión documental', 'Solicitudes y firmas'],
+  'Tesorería': ['Nómina y comprobantes'],
+  'Coordinación General': ['Ficha técnica', 'AGREBOT'],
+  'Coordinador de Sede': ['Ficha técnica', 'Solicitudes y firmas'],
+  'Coordinadora Administrativa y Financiera': ['Ficha técnica', 'Nómina y comprobantes', 'Solicitudes y firmas'],
+  'Coordinador General': ['Ficha técnica'],
+  'Talento Humano': ['Ficha técnica'],
+  'Experiencia al Agremiado': ['Ficha técnica'],
+  'Asesora de Calidad': ['Dashboard gerente', 'Ficha técnica', 'Revisión documental', 'Informes de actividades'],
+  'Director Ejecutivo': ['Dashboard gerente', 'Asignación mensual', 'Informes de actividades'],
+  'Seguridad y Salud en el Trabajo': ['Dashboard gerente', 'Ficha técnica', 'Informes de actividades'],
+  'Administrador de Sistemas': ['Ficha técnica', 'Nómina y comprobantes', 'Solicitudes y firmas', 'AGREBOT'],
+};
+
 function supportDocs(tipo = 'Asistencial', agremiadoId = '') {
-  return (tipo === 'Administrativo' ? docsAdministrativo : docsAsistencial).map((nombre, index) => ({
+  return documentRequirements(tipo).map((nombre, index) => ({
     id: `${agremiadoId || 'doc'}-${index}`,
     nombre,
     categoria: tipo,
@@ -64,6 +94,7 @@ function userFromRow(row: any) {
   return {
     id: row.id,
     nombre: row.nombre,
+    usuario: row.usuario ?? row.correo,
     correo: row.correo,
     clave: '',
     rol: row.rol,
@@ -74,6 +105,47 @@ function userFromRow(row: any) {
     activo: row.activo,
     cargo: row.cargo ?? undefined,
     telefono: row.telefono ?? undefined,
+  };
+}
+
+function profileFromRow(row: any) {
+  return {
+    userId: row.user_id,
+    documento: row.documento,
+    lugarExpedicion: row.lugar_expedicion ?? '',
+    cnv: row.cnv ?? '',
+    fechaIngreso: row.fecha_ingreso ?? '',
+    fechaRetiro: row.fecha_retiro ?? '',
+    estadoLaboral: row.estado_laboral ?? '',
+    formacion: row.formacion ?? '',
+    proceso: row.proceso ?? '',
+    direccion: row.direccion ?? '',
+    barrio: row.barrio ?? '',
+    municipio: row.municipio ?? '',
+    departamento: row.departamento ?? '',
+    sexo: row.sexo ?? '',
+    estadoCivil: row.estado_civil ?? '',
+    personasCargo: row.personas_cargo ?? '',
+    fechaNacimiento: row.fecha_nacimiento ?? '',
+    lugarNacimiento: row.lugar_nacimiento ?? '',
+    tipoContrato: row.tipo_contrato ?? '',
+    formaPago: row.forma_pago ?? '',
+    banco: row.banco ?? '',
+    tipoCuenta: row.tipo_cuenta ?? '',
+    numeroCuenta: row.numero_cuenta ?? '',
+    eps: row.eps ?? '',
+    afp: row.afp ?? '',
+    arl: row.arl ?? '',
+    cajaCompensacion: row.caja_compensacion ?? '',
+    rh: row.rh ?? '',
+    talla: row.talla ?? '',
+    retencionFuente: row.retencion_fuente ?? '',
+    observaciones: row.observaciones ?? '',
+    fechaExamenMedico: row.fecha_examen_medico ?? '',
+    ciudadVotacion: row.ciudad_votacion ?? '',
+    puestoVotacion: row.puesto_votacion ?? '',
+    fuenteOrigen: row.fuente_origen ?? '',
+    datosAdicionales: row.datos_adicionales ?? {},
   };
 }
 
@@ -91,7 +163,7 @@ function documentFromRow(row: any) {
       nombre: row.archivo_nombre ?? row.nombre,
       tipo: row.archivo_tipo ?? 'application/octet-stream',
       tamano: Number(row.archivo_tamano ?? 0),
-      dataUrl: row.archivo_path,
+      dataUrl: `/api/agreserge-documents/${encodeURIComponent(row.id)}`,
       fecha: row.fecha_carga ?? '',
     } : undefined,
   };
@@ -111,6 +183,7 @@ export async function loadDB() {
   const supabase = requireSupabaseAdmin();
   const [
     users,
+    profiles,
     entities,
     areas,
     documents,
@@ -121,6 +194,7 @@ export async function loadDB() {
     audit,
   ] = await Promise.all([
     supabase.from('agreserge_users').select('*').order('nombre'),
+    supabase.from('agreserge_profiles').select('*'),
     supabase.from('agreserge_entities').select('*').order('nombre'),
     supabase.from('agreserge_areas').select('*').order('nombre'),
     supabase.from('agreserge_documents').select('*').order('nombre'),
@@ -131,7 +205,7 @@ export async function loadDB() {
     supabase.from('agreserge_audit').select('*').order('created_at', { ascending: false }).limit(200),
   ]);
 
-  const error = [users.error, entities.error, areas.error, documents.error, permissions.error, baseAssignments.error, monthlyAssignments.error, procedures.error, audit.error].find(Boolean);
+  const error = [users.error, profiles.error, entities.error, areas.error, documents.error, permissions.error, baseAssignments.error, monthlyAssignments.error, procedures.error, audit.error].find(Boolean);
   if (error) throw error;
 
   const docs: Record<string, any[]> = {};
@@ -142,6 +216,7 @@ export async function loadDB() {
 
   return {
     usuarios: ((users.data ?? []) as any[]).map(userFromRow),
+    perfiles: Object.fromEntries(((profiles.data ?? []) as any[]).map((row: any) => [row.user_id, profileFromRow(row)])),
     entidades: ((entities.data ?? []) as any[]).map((row: any) => ({
       id: row.id,
       nombre: row.nombre,
@@ -153,7 +228,10 @@ export async function loadDB() {
     })),
     areas: ((areas.data ?? []) as any[]).map((row: any) => ({ id: row.id, nombre: row.nombre, entidadId: row.entidad_id, tipo: row.tipo, liderId: row.lider_id ?? undefined })),
     documentos: docs,
-    permisos: Object.fromEntries(((permissions.data ?? []) as any[]).map((row: any) => [row.rol, row.modulos ?? []])),
+    permisos: {
+      ...defaultPermissions,
+      ...Object.fromEntries(((permissions.data ?? []) as any[]).map((row: any) => [row.rol, Array.from(new Set([...(row.modulos ?? []), ...(requiredOperationalModules[row.rol] ?? [])]))])),
+    },
     asignacionesBase: ((baseAssignments.data ?? []) as any[]).map(assignmentFromRow),
     asignacionesMensuales: ((monthlyAssignments.data ?? []) as any[]).map(assignmentFromRow),
     tramites: ((procedures.data ?? []) as any[]).map((row: any) => ({
@@ -210,11 +288,17 @@ async function replaceTable(table: string, rows: any[], key = 'id') {
 export async function saveFullDB(db: any, options: { force?: boolean; actor?: any } = {}) {
   if (!options.force && !canAdmin(options.actor)) throw new Error('Este perfil no tiene permiso para sincronizar toda la base.');
 
+  const supabase = requireSupabaseAdmin() as any;
+  const { data: storedUsers, error: storedUsersError } = await supabase.from('agreserge_users').select('id,clave_hash');
+  if (storedUsersError) throw storedUsersError;
+  const storedHashes = new Map((storedUsers ?? []).map((user: any) => [user.id, user.clave_hash]));
+
   const userRows = (db.usuarios ?? []).map((user: any) => ({
     id: user.id,
     nombre: user.nombre,
+    usuario: user.usuario || user.correo,
     correo: user.correo,
-    clave_hash: user.clave ? hashPassword(user.clave) : undefined,
+    clave_hash: user.clave ? hashPassword(user.clave) : storedHashes.get(user.id) ?? null,
     rol: user.rol,
     tipo: user.tipo ?? null,
     entidad_id: user.entidadId ?? null,
@@ -223,6 +307,47 @@ export async function saveFullDB(db: any, options: { force?: boolean; actor?: an
     activo: user.activo ?? true,
     cargo: user.cargo ?? null,
     telefono: user.telefono ?? null,
+    updated_at: new Date().toISOString(),
+  }));
+  const validUserIds = new Set(userRows.map((user: any) => user.id));
+
+  const profileRows = Object.values(db.perfiles ?? {}).map((item: any) => ({
+    user_id: item.userId,
+    documento: item.documento,
+    lugar_expedicion: item.lugarExpedicion || null,
+    cnv: item.cnv || null,
+    fecha_ingreso: item.fechaIngreso || null,
+    fecha_retiro: item.fechaRetiro || null,
+    estado_laboral: item.estadoLaboral || null,
+    formacion: item.formacion || null,
+    proceso: item.proceso || null,
+    direccion: item.direccion || null,
+    barrio: item.barrio || null,
+    municipio: item.municipio || null,
+    departamento: item.departamento || null,
+    sexo: item.sexo || null,
+    estado_civil: item.estadoCivil || null,
+    personas_cargo: item.personasCargo === '' ? null : Number(item.personasCargo),
+    fecha_nacimiento: item.fechaNacimiento || null,
+    lugar_nacimiento: item.lugarNacimiento || null,
+    tipo_contrato: item.tipoContrato || null,
+    forma_pago: item.formaPago || null,
+    banco: item.banco || null,
+    tipo_cuenta: item.tipoCuenta || null,
+    numero_cuenta: item.numeroCuenta || null,
+    eps: item.eps || null,
+    afp: item.afp || null,
+    arl: item.arl || null,
+    caja_compensacion: item.cajaCompensacion || null,
+    rh: item.rh || null,
+    talla: item.talla || null,
+    retencion_fuente: item.retencionFuente || null,
+    observaciones: item.observaciones || null,
+    fecha_examen_medico: item.fechaExamenMedico || null,
+    ciudad_votacion: item.ciudadVotacion || null,
+    puesto_votacion: item.puestoVotacion || null,
+    fuente_origen: item.fuenteOrigen || null,
+    datos_adicionales: item.datosAdicionales ?? {},
     updated_at: new Date().toISOString(),
   }));
 
@@ -263,13 +388,17 @@ export async function saveFullDB(db: any, options: { force?: boolean; actor?: an
   }));
 
   const permissionRows = Object.entries(db.permisos ?? {}).map(([rol, modulos]) => ({ rol, modulos, updated_at: new Date().toISOString() }));
-  const assignmentRows = [...(db.asignacionesBase ?? []).map((item: any) => ({ ...item, esBase: true })), ...(db.asignacionesMensuales ?? []).map((item: any) => ({ ...item, esBase: false }))].map((item: any) => ({
+  const assignmentRows = [...(db.asignacionesBase ?? []).map((item: any) => ({ ...item, esBase: true })), ...(db.asignacionesMensuales ?? []).map((item: any) => ({ ...item, esBase: false }))]
+    .filter((item: any) => validUserIds.has(item.responsableId))
+    .map((item: any) => ({
     id: item.id,
     anexo: item.anexo,
     titulo: item.titulo,
     tipo: item.tipo,
     responsable_id: item.responsableId,
-    coordinador_id: item.coordinadorId ?? null,
+    // Las cuentas institucionales pueden ser reprovisionadas con otro id. Una
+    // referencia histórica inválida no debe impedir guardar toda la asignación.
+    coordinador_id: validUserIds.has(item.coordinadorId) ? item.coordinadorId : null,
     mes: item.mes,
     anio: item.anio,
     plantilla_google: item.plantillaGoogle ?? null,
@@ -298,7 +427,14 @@ export async function saveFullDB(db: any, options: { force?: boolean; actor?: an
     updated_at: new Date().toISOString(),
   }));
 
-  await replaceTable('agreserge_users', userRows);
+  if (userRows.length) {
+    const { error } = await supabase.from('agreserge_users').upsert(userRows, { onConflict: 'id' });
+    if (error) throw error;
+  }
+  if (profileRows.length) {
+    const { error } = await (requireSupabaseAdmin() as any).from('agreserge_profiles').upsert(profileRows, { onConflict: 'user_id' });
+    if (error) throw error;
+  }
   await replaceTable('agreserge_entities', entityRows);
   await replaceTable('agreserge_areas', areaRows);
   await replaceTable('agreserge_documents', documentRows);

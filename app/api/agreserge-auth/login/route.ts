@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { hashPassword, setSessionCookie } from '../../../../lib/agreserge-auth';
+import { setSessionCookie, verifyPassword } from '../../../../lib/agreserge-auth';
 import { ensureSeeded, loadDB } from '../../../../lib/agreserge-db';
 import { requireSupabaseAdmin } from '../../../../lib/supabase-admin';
 
@@ -7,20 +7,21 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {
-    const { correo, clave } = await request.json();
+    const { usuario, correo, clave } = await request.json();
+    const login = String(usuario || correo || '').trim().toLowerCase();
     await ensureSeeded();
 
     const supabase = requireSupabaseAdmin();
-    const { data: user, error } = await supabase
+    const { data: users, error } = await supabase
       .from('agreserge_users')
       .select('*')
-      .eq('correo', correo)
       .eq('activo', true)
-      .maybeSingle();
+      .or(`correo.ilike.${login},usuario.ilike.${login}`)
+      .limit(1);
 
     if (error) throw error;
-    const foundUser = user as any;
-    if (!foundUser || foundUser.clave_hash !== hashPassword(clave)) {
+    const foundUser = (users as any[])?.[0];
+    if (!foundUser || !verifyPassword(String(clave || ''), foundUser.clave_hash)) {
       return NextResponse.json({ error: 'Usuario, clave o perfil inactivo' }, { status: 401 });
     }
 

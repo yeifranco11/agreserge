@@ -1,3 +1,4 @@
 import './globals.css';
+import './reports.css';
 export const metadata={title:'Portal AGRESERGE',description:'Portal institucional AGRESERGE'};
 export default function RootLayout({children}:{children:React.ReactNode}){return <html lang="es"><body>{children}</body></html>}

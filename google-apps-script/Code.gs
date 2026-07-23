@@ -1,0 +1,179 @@
+const MASTER_FOLDER_ID = '1L6WrnOjq1ui19SQrzWvSqe5rLHKC-b60';
+const PAYROLL_SPREADSHEET_ID = '11R2hU9IzD55MBa8FivztC38boeQAxGpoMly_3yH0Ajk';
+
+function doGet() {
+  return json_({ ok: true, service: 'AGRESERGE Drive Bridge' });
+}
+
+function doPost(e) {
+  try {
+    const input = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+    const expected = PropertiesService.getScriptProperties().getProperty('PORTAL_SECRET');
+    if (!expected || input.secret !== expected) throw new Error('Acceso no autorizado');
+    if (input.action === 'openPeriod') return json_(openPeriod_(input));
+    if (input.action === 'consolidate') return json_(consolidate_(input));
+    if (input.action === 'importReportFile') return json_(importReportFile_(input));
+    if (input.action === 'lookupPayroll') return json_(lookupPayroll_(input));
+    throw new Error('Acción no soportada');
+  } catch (error) {
+    return json_({ ok: false, error: String(error.message || error) });
+  }
+}
+
+function lookupPayroll_(input) {
+  const document = String(input.documento || '').replace(/\D/g, '');
+  if (!document) throw new Error('Documento requerido');
+  const spreadsheet = SpreadsheetApp.openById(PAYROLL_SPREADSHEET_ID);
+  const tabNames = ['ADMINISTRATIVO', 'SERV GEN Y MANTENIMIENTO', 'ASISTENCIAL'];
+  for (let s = 0; s < tabNames.length; s++) {
+    const sheet = spreadsheet.getSheetByName(tabNames[s]);
+    if (!sheet) continue;
+    const rows = sheet.getDataRange().getDisplayValues();
+    const headerIndex = rows.findIndex(function (row) { return row.some(function (cell) { return String(cell).trim().toUpperCase() === 'CEDULA'; }); });
+    if (headerIndex < 0) continue;
+    const headers = rows[headerIndex].map(function (value) { return String(value).trim(); });
+    const documentIndex = headers.findIndex(function (value) { return value.toUpperCase() === 'CEDULA'; });
+    const match = rows.slice(headerIndex + 1).find(function (row) { return String(row[documentIndex] || '').replace(/\D/g, '') === document; });
+    if (!match) continue;
+    const record = {};
+    headers.forEach(function (header, index) { record[header || ('CAMPO_' + (index + 1))] = match[index] || ''; });
+    const get = function () { for (let i = 0; i < arguments.length; i++) if (record[arguments[i]] !== undefined) return record[arguments[i]]; return ''; };
+    const money = function (value) { return Number(String(value || '').replace(/[^0-9-]/g, '') || 0); };
+    return { ok: true, tab: tabNames[s], payroll: {
+      documento: document,
+      nombre: get('NOMBRE AFILIADO PARTICIPE'),
+      cargo: get('CARGO', 'PROCESO', 'SERVICIO'),
+      area: get('AREA', 'CENTRO DE COSTOS'),
+      centroCostos: get('CENTRO DE COSTOS'),
+      dias: get('DIAS COMPENSADOS'),
+      ordinaria: money(get('COMPENSACION ORDINARIA')),
+      otras: money(get('OTRAS COMPENSACIONES ')),
+      transporte: money(get('COMPENSACION POR TRANSPORTE')),
+      salud: money(get('SALUD')),
+      pension: money(get('PENSION')),
+      arl: money(get('ARL')),
+      retencion: money(get('RETEFUENTE')),
+      otrosDescuentos: money(get('OTROS DESCUENTOS', 'VALOR DESCUENTO')),
+      adicionales: money(get('TRIAGE/VALOR ADICIONAL', 'VALOR ADICIONAL')),
+      totalRecibido: money(get('VALOR RECIBIDO MES')),
+      totalProceso: money(get('Valor total Mes Proceso 2026')),
+      observaciones: get('OBSERVACIONES', 'Observaciones')
+    }};
+  }
+  throw new Error('No se encontró nómina para ese documento');
+}
+
+function openPeriod_(input) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const root = DriveApp.getFolderById(MASTER_FOLDER_ID);
+    const periods = childFolder_(root, 'PERIODOS GENERADOS');
+    const year = childFolder_(periods, String(input.anio));
+    const hospital = childFolder_(year, String(input.hospital || 'HOSPITAL').toUpperCase());
+    const month = childFolder_(hospital, String(input.mes).toUpperCase());
+    const items = (input.assignments || []).map(function (assignment) {
+      const obligation = childFolder_(month, String(assignment.obligacion || assignment.anexo).padStart(2, '0') + ' - ' + safe_(assignment.titulo || ('OBLIGACIÓN ' + assignment.obligacion)));
+      const annex = childFolder_(obligation, assignment.anexo ? ('ANEXO ' + assignment.anexo + ' - ' + safe_(assignment.titulo || 'INFORME')) : 'SOPORTES');
+      const template = assignment.anexo ? templateByNumber_(root, assignment.anexo) : null;
+      const safeName = String(assignment.responsableNombre || 'RESPONSABLE').replace(/[\\/:*?"<>|]/g, '-');
+      const title = String(input.anio) + '-' + String(input.mes).toUpperCase() + ' - ANEXO ' + (assignment.anexo || 'S/A') + ' - ' + safeName;
+      const existing = filesByName_(annex, title);
+      const copy = existing.length ? existing[0] : template ? template.makeCopy(title, annex) : createDocIn_(annex, title, assignment.titulo);
+      const subitems = (assignment.subinformes || []).sort(function(a,b){ return Number(a.orden)-Number(b.orden); }).map(function(sub) {
+        const subFolder = childFolder_(annex, String(sub.orden).padStart(2, '0') + ' - ' + safe_(sub.titulo));
+        const subTitle = title + ' - ' + safe_(sub.responsableNombre);
+        const subCopy = createDocIn_(subFolder, subTitle, sub.titulo);
+        return { responsableId: sub.responsableId, nombre: subTitle, id: subCopy.getId(), url: subCopy.getUrl(), folderId: subFolder.getId(), folderUrl: subFolder.getUrl(), orden: sub.orden };
+      });
+      return { obligacion: assignment.obligacion, anexo: assignment.anexo, responsableId: assignment.responsableId, nombre: title, id: copy.getId(), url: copy.getUrl(), folderId: annex.getId(), folderUrl: annex.getUrl(), subitems: subitems };
+    });
+    return { ok: true, folderId: month.getId(), folderUrl: month.getUrl(), items: items };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function consolidate_(input) {
+  const root = DriveApp.getFolderById(MASTER_FOLDER_ID);
+  const periods = childFolder_(root, 'PERIODOS GENERADOS');
+  const year = childFolder_(periods, String(input.anio));
+  const hospital = childFolder_(year, String(input.hospital || 'HOSPITAL').toUpperCase());
+  const month = childFolder_(hospital, String(input.mes).toUpperCase());
+  const name = 'INFORME DE EJECUCIÓN - ' + safe_(input.hospital || '') + ' - ' + String(input.mes).toUpperCase() + ' ' + input.anio;
+  const old = filesByName_(month, name);
+  if (old.length) return { ok: true, id: old[0].getId(), url: old[0].getUrl() };
+  const doc = DocumentApp.create(name);
+  const body = doc.getBody();
+  body.appendParagraph('ASOCIACIÓN GREMIAL SINDICAL DE PRESTACIONES DE SERVICIOS GENERALES Y DE SALUD DEL VALLE').setHeading(DocumentApp.ParagraphHeading.HEADING1);
+  body.appendParagraph('INFORME DE EJECUCIÓN DE ACTIVIDADES').setHeading(DocumentApp.ParagraphHeading.TITLE);
+  body.appendParagraph(String(input.hospital || '') + ' · ' + input.mes + ' ' + input.anio);
+  (input.items || []).sort(function(a,b){ return Number(a.obligacion)-Number(b.obligacion) || Number(a.orden)-Number(b.orden); }).forEach(function(item) {
+    body.appendPageBreak();
+    body.appendParagraph('OBLIGACIÓN CONTRACTUAL ' + item.obligacion).setHeading(DocumentApp.ParagraphHeading.HEADING1);
+    body.appendParagraph(item.obligacionTitulo || '');
+    body.appendParagraph('ANEXO ' + (item.anexo || 'S/A') + ' · ' + (item.titulo || '')).setHeading(DocumentApp.ParagraphHeading.HEADING2);
+    const link = body.appendParagraph(item.url || 'Sin archivo cargado');
+    if (item.url) link.setLinkUrl(item.url);
+    (item.subitems || []).sort(function(a,b){ return Number(a.orden)-Number(b.orden); }).forEach(function(sub) {
+      body.appendParagraph(sub.orden + '. ' + sub.titulo + ' · ' + (sub.responsableNombre || '')).setHeading(DocumentApp.ParagraphHeading.HEADING3);
+      const subLink = body.appendParagraph(sub.url || 'Pendiente');
+      if (sub.url) subLink.setLinkUrl(sub.url);
+    });
+  });
+  doc.saveAndClose();
+  const file = DriveApp.getFileById(doc.getId());
+  file.moveTo(month);
+  return { ok: true, id: file.getId(), url: file.getUrl(), wordUrl: 'https://docs.google.com/document/d/' + file.getId() + '/export?format=docx' };
+}
+
+function importReportFile_(input) {
+  if (!input.folderId || !input.fileUrl || !input.fileName) throw new Error('Archivo y carpeta son obligatorios');
+  const response = UrlFetchApp.fetch(input.fileUrl, { muteHttpExceptions: true });
+  if (response.getResponseCode() >= 300) throw new Error('No fue posible descargar el archivo temporal');
+  const blob = response.getBlob().setName(safe_(input.fileName));
+  if (input.mimeType) blob.setContentType(input.mimeType);
+  const file = DriveApp.getFolderById(input.folderId).createFile(blob);
+  return { ok: true, id: file.getId(), url: file.getUrl(), name: file.getName() };
+}
+
+function createDocIn_(folder, title, subtitle) {
+  const existing = filesByName_(folder, title);
+  if (existing.length) return existing[0];
+  const doc = DocumentApp.create(title);
+  doc.getBody().appendParagraph(title).setHeading(DocumentApp.ParagraphHeading.TITLE);
+  if (subtitle) doc.getBody().appendParagraph(subtitle);
+  doc.saveAndClose();
+  const file = DriveApp.getFileById(doc.getId());
+  file.moveTo(folder);
+  return file;
+}
+
+function safe_(value) {
+  return String(value || '').replace(/[\\/:*?"<>|]/g, '-').trim();
+}
+
+function templateByNumber_(folder, number) {
+  const pattern = new RegExp('#' + Number(number) + '(?:\\D|$)');
+  const files = folder.getFiles();
+  while (files.hasNext()) {
+    const file = files.next();
+    if (pattern.test(file.getName())) return file;
+  }
+  throw new Error('No se encontró la plantilla #' + number);
+}
+
+function childFolder_(parent, name) {
+  const found = parent.getFoldersByName(name);
+  return found.hasNext() ? found.next() : parent.createFolder(name);
+}
+
+function filesByName_(folder, name) {
+  const found = folder.getFilesByName(name), result = [];
+  while (found.hasNext()) result.push(found.next());
+  return result;
+}
+
+function json_(value) {
+  return ContentService.createTextOutput(JSON.stringify(value)).setMimeType(ContentService.MimeType.JSON);
+}

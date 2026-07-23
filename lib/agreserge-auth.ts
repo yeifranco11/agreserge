@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'crypto';
+import { createHmac, randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import { cookies } from 'next/headers';
 
 const COOKIE_NAME = 'agreserge_session';
@@ -14,6 +14,21 @@ function secret() {
 
 export function hashPassword(password: string) {
   return createHmac('sha256', secret()).update(password).digest('hex');
+}
+
+export function hashPortablePassword(password: string) {
+  const salt = randomBytes(16).toString('hex');
+  const digest = scryptSync(password, salt, 32).toString('hex');
+  return `scrypt$${salt}$${digest}`;
+}
+
+export function verifyPassword(password: string, stored?: string | null) {
+  if (!stored) return false;
+  if (!stored.startsWith('scrypt$')) return stored === hashPassword(password);
+  const [, salt, expected] = stored.split('$');
+  if (!salt || !expected) return false;
+  const actual = scryptSync(password, salt, 32).toString('hex');
+  return actual.length === expected.length && timingSafeEqual(Buffer.from(actual), Buffer.from(expected));
 }
 
 function sign(payload: string) {
