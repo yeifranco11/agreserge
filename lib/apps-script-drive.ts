@@ -10,6 +10,7 @@ type PeriodAssignment = {
 export async function openDrivePeriod(input: {
   mes: string;
   anio: string;
+  obligations: Array<{ obligacion: number; titulo: string }>;
   assignments: PeriodAssignment[];
   hospital?: string;
 }) {

@@ -72,14 +72,38 @@ function openPeriod_(input) {
     const year = childFolder_(periods, String(input.anio));
     const hospital = childFolder_(year, String(input.hospital || 'HOSPITAL').toUpperCase());
     const month = childFolder_(hospital, String(input.mes).toUpperCase());
+    const obligationFolders = {};
+
+    (input.obligations || []).sort(function(a, b) {
+      return Number(a.obligacion) - Number(b.obligacion);
+    }).forEach(function(obligation) {
+      const number = Number(obligation.obligacion);
+      const folder = childFolder_(
+        month,
+        String(number).padStart(2, '0') + ' - ' + safe_(obligation.titulo || ('OBLIGACIÓN ' + number))
+      );
+      obligationFolders[number] = folder;
+      const coverFolder = childFolder_(folder, '00 - PORTADA DE LA OBLIGACIÓN');
+      const coverTemplate = activityTemplateByNumber_(root, number);
+      const coverName = String(number).padStart(2, '0') + ' - ACTIVIDAD CONTRATADA - PORTADA';
+      if (!filesByName_(coverFolder, coverName).length) coverTemplate.makeCopy(coverName, coverFolder);
+    });
+
+    const annexTemplate = annexTemplate_(root);
     const items = (input.assignments || []).map(function (assignment) {
-      const obligation = childFolder_(month, String(assignment.obligacion || assignment.anexo).padStart(2, '0') + ' - ' + safe_(assignment.titulo || ('OBLIGACIÓN ' + assignment.obligacion)));
-      const annex = childFolder_(obligation, assignment.anexo ? ('ANEXO ' + assignment.anexo + ' - ' + safe_(assignment.titulo || 'INFORME')) : 'SOPORTES');
-      const template = assignment.anexo ? templateByNumber_(root, assignment.anexo) : null;
+      const obligationNumber = Number(assignment.obligacion);
+      const obligation = obligationFolders[obligationNumber] || childFolder_(
+        month,
+        String(obligationNumber).padStart(2, '0') + ' - OBLIGACIÓN ' + obligationNumber
+      );
+      const annex = childFolder_(
+        obligation,
+        'ANEXO ' + String(assignment.anexo).padStart(2, '0') + ' - ' + safe_(assignment.titulo || 'INFORME')
+      );
       const safeName = String(assignment.responsableNombre || 'RESPONSABLE').replace(/[\\/:*?"<>|]/g, '-');
-      const title = String(input.anio) + '-' + String(input.mes).toUpperCase() + ' - ANEXO ' + (assignment.anexo || 'S/A') + ' - ' + safeName;
+      const title = String(input.anio) + '-' + String(input.mes).toUpperCase() + ' - ANEXO ' + assignment.anexo + ' - ' + safeName;
       const existing = filesByName_(annex, title);
-      const copy = existing.length ? existing[0] : template ? template.makeCopy(title, annex) : createDocIn_(annex, title, assignment.titulo);
+      const copy = existing.length ? existing[0] : annexTemplate.makeCopy(title, annex);
       const subitems = (assignment.subinformes || []).sort(function(a,b){ return Number(a.orden)-Number(b.orden); }).map(function(sub) {
         const subFolder = childFolder_(annex, String(sub.orden).padStart(2, '0') + ' - ' + safe_(sub.titulo));
         const subTitle = title + ' - ' + safe_(sub.responsableNombre);
@@ -153,14 +177,24 @@ function safe_(value) {
   return String(value || '').replace(/[\\/:*?"<>|]/g, '-').trim();
 }
 
-function templateByNumber_(folder, number) {
-  const pattern = new RegExp('#' + Number(number) + '(?:\\D|$)');
+function activityTemplateByNumber_(folder, number) {
+  const pattern = new RegExp('ACTIVIDADES\\s+CONTRATADAS\\s*#\\s*' + Number(number) + '(?:\\D|$)', 'i');
   const files = folder.getFiles();
   while (files.hasNext()) {
     const file = files.next();
     if (pattern.test(file.getName())) return file;
   }
-  throw new Error('No se encontró la plantilla #' + number);
+  throw new Error('No se encontró la portada de la obligación #' + number);
+}
+
+function annexTemplate_(folder) {
+  const files = folder.getFiles();
+  while (files.hasNext()) {
+    const file = files.next();
+    const name = file.getName().toUpperCase();
+    if (name.indexOf('AD-FO-06') >= 0 && name.indexOf('INFORME') >= 0) return file;
+  }
+  throw new Error('No se encontró la plantilla maestra AD-FO-06-INFORME');
 }
 
 function childFolder_(parent, name) {

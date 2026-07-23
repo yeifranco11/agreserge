@@ -28,14 +28,18 @@ async function context() {
   return { userId, db, actor, supabase: requireSupabaseAdmin() as any };
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const { actor, supabase } = await context();
+    const mineOnly = new URL(request.url).searchParams.get("scope") === "mine";
     const superManager = ["Administrador de Sistemas", "Coordinación AGRESERGE", "Coordinación General", "Coordinador General", "Director Ejecutivo"].includes(actor.rol);
     const manager = superManager || ["Coordinadora Administrativa y Financiera", "Coordinación Administrativa", "Coordinación Asistencial", "Coordinador de Proceso AGRESERGE", "Líder Institucional", "Líder de Proceso"].includes(actor.rol);
     let submissions = supabase.from("agreserge_report_submissions").select("*, obligation:agreserge_report_obligations(*), annex:agreserge_report_annexes(*)").order("orden");
-    if (!manager) submissions = submissions.eq("responsable_id", actor.id);
-    else if (!superManager) submissions = submissions.or(`responsable_id.eq.${actor.id},delegado_por_id.eq.${actor.id}`);
+    if (mineOnly || !superManager) {
+      submissions = manager
+        ? submissions.or(`responsable_id.eq.${actor.id},delegado_por_id.eq.${actor.id}`)
+        : submissions.eq("responsable_id", actor.id);
+    }
     const [periods, obligations, annexes, submissionRows] = await Promise.all([
       supabase.from("agreserge_report_periods").select("*, entity:agreserge_entities(*)").order("created_at", { ascending: false }),
       supabase.from("agreserge_report_obligations").select("*").order("orden"),
@@ -58,7 +62,31 @@ export async function POST(request: Request) {
   try {
     const { actor, db, supabase } = await context();
     const input = await request.json();
-    if (!canAdmin(actor)) return NextResponse.json({ error: "Perfil no autorizado" }, { status: 403 });
+    const reportManagers = [
+      "Administrador de Sistemas", "Coordinación AGRESERGE", "Coordinación General",
+      "Coordinador General", "Director Ejecutivo", "Coordinadora Administrativa y Financiera",
+      "Coordinación Administrativa", "Coordinación Asistencial",
+    ];
+    const canManageReports = canAdmin(actor) || reportManagers.includes(actor.rol);
+    const managerActions = new Set(["bootstrap-hgc", "reset-periods", "open-period", "close-period", "assign-annex"]);
+    if (managerActions.has(input.action) && !canManageReports) {
+      return NextResponse.json({ error: "Perfil no autorizado para administrar informes" }, { status: 403 });
+    }
+
+    if (input.action === "assign-annex") {
+      if (!input.annexId || !input.responsableId) {
+        return NextResponse.json({ error: "Seleccione el anexo y su responsable" }, { status: 400 });
+      }
+      const responsible = db.usuarios.find((user: any) => user.id === input.responsableId && user.activo);
+      if (!responsible) return NextResponse.json({ error: "El responsable seleccionado no está activo" }, { status: 400 });
+      const result = await supabase.from("agreserge_report_annexes").update({
+        responsable_id: responsible.id,
+        coordinador_id: actor.id,
+        updated_at: new Date().toISOString(),
+      }).eq("id", input.annexId);
+      if (result.error) throw result.error;
+      return NextResponse.json({ ok: true });
+    }
 
     if (input.action === "bootstrap-hgc") {
       await supabase.from("agreserge_entities").upsert({
@@ -99,8 +127,7 @@ export async function POST(request: Request) {
           titulo: obligation.title, orden: obligation.number, activa: true, updated_at: new Date().toISOString(),
         }, { onConflict: "entidad_id,numero" });
         if (obligationResult.error) throw obligationResult.error;
-        const annexes = obligation.annexes.length ? obligation.annexes : [{ number: null as any, title: "Evidencia y certificación de la obligación" }];
-        const annexRows = annexes.map((annex, index) => {
+        const annexRows = obligation.annexes.map((annex, index) => {
           const isAdministrative = annex.number === 1 || annex.number === 2;
           const isAssistance = annex.number === 3 || annex.number === 4;
           return {
@@ -115,8 +142,10 @@ export async function POST(request: Request) {
           };
         });
         await supabase.from("agreserge_report_annexes").delete().eq("obligation_id", obligationId);
-        const annexResult = await supabase.from("agreserge_report_annexes").insert(annexRows);
-        if (annexResult.error) throw annexResult.error;
+        if (annexRows.length) {
+          const annexResult = await supabase.from("agreserge_report_annexes").insert(annexRows);
+          if (annexResult.error) throw annexResult.error;
+        }
       }
       return NextResponse.json({ ok: true, usersCreated: userRows.length, obligations: 24, annexes: 27 });
     }
@@ -146,7 +175,17 @@ export async function POST(request: Request) {
         });
         return { obligacion: obligation.numero, anexo: annex.numero, titulo: annex.titulo, responsableId: responsible.id, responsableNombre: responsible.nombre, subinformes };
       });
-      const drive = await openDrivePeriod({ hospital: entity.nombre, mes: input.mes, anio: String(input.anio), assignments });
+      const obligations = (obligationsResult.data || []).map((obligation: any) => ({
+        obligacion: obligation.numero,
+        titulo: obligation.titulo,
+      }));
+      const drive = await openDrivePeriod({
+        hospital: entity.nombre,
+        mes: input.mes,
+        anio: String(input.anio),
+        obligations,
+        assignments,
+      });
       const periodId = randomUUID();
       const periodResult = await supabase.from("agreserge_report_periods").insert({
         id: periodId, entidad_id: entidadId, mes: input.mes, anio: Number(input.anio),
@@ -179,6 +218,13 @@ export async function POST(request: Request) {
     }
 
     if (input.action === "delegate" || input.action === "reorder") {
+      const current = await supabase.from("agreserge_report_submissions")
+        .select("responsable_id, delegado_por_id").eq("id", input.id).single();
+      if (current.error) throw current.error;
+      const ownsAssignment = current.data.responsable_id === actor.id || current.data.delegado_por_id === actor.id;
+      if (!canManageReports && !ownsAssignment) {
+        return NextResponse.json({ error: "Solo puede modificar los informes que tiene asignados" }, { status: 403 });
+      }
       const updates: any = { updated_at: new Date().toISOString() };
       if (input.action === "delegate") {
         updates.responsable_id = input.responsableId;
