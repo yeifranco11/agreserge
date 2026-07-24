@@ -14,6 +14,7 @@ function doPost(e) {
     if (input.action === 'consolidate') return json_(consolidate_(input));
     if (input.action === 'importReportFile') return json_(importReportFile_(input));
     if (input.action === 'createSubreport') return json_(createSubreport_(input));
+    if (input.action === 'resetPeriods') return json_(resetPeriods_(input));
     if (input.action === 'lookupPayroll') return json_(lookupPayroll_(input));
     throw new Error('Acción no soportada');
   } catch (error) {
@@ -70,9 +71,9 @@ function openPeriod_(input) {
   try {
     const root = DriveApp.getFolderById(MASTER_FOLDER_ID);
     const periods = childFolder_(root, 'PERIODOS GENERADOS');
-    const year = childFolder_(periods, String(input.anio));
-    const hospital = childFolder_(year, String(input.hospital || 'HOSPITAL').toUpperCase());
-    const month = childFolder_(hospital, String(input.mes).toUpperCase());
+    const hospital = childFolder_(periods, safe_(String(input.hospital || 'HOSPITAL').toUpperCase()));
+    const year = childFolder_(hospital, String(input.anio));
+    const month = childFolder_(year, String(input.mes).toUpperCase());
     const obligationFolders = {};
 
     (input.obligations || []).sort(function(a, b) {
@@ -122,9 +123,9 @@ function openPeriod_(input) {
 function consolidate_(input) {
   const root = DriveApp.getFolderById(MASTER_FOLDER_ID);
   const periods = childFolder_(root, 'PERIODOS GENERADOS');
-  const year = childFolder_(periods, String(input.anio));
-  const hospital = childFolder_(year, String(input.hospital || 'HOSPITAL').toUpperCase());
-  const month = childFolder_(hospital, String(input.mes).toUpperCase());
+  const hospital = childFolder_(periods, safe_(String(input.hospital || 'HOSPITAL').toUpperCase()));
+  const year = childFolder_(hospital, String(input.anio));
+  const month = childFolder_(year, String(input.mes).toUpperCase());
   const name = 'INFORME DE EJECUCIÓN - ' + safe_(input.hospital || '') + ' - ' + String(input.mes).toUpperCase() + ' ' + input.anio;
   const old = filesByName_(month, name);
   if (old.length) return { ok: true, id: old[0].getId(), url: old[0].getUrl() };
@@ -182,6 +183,19 @@ function createSubreport_(input) {
     folderUrl: folder.getUrl(),
     name: documentTitle
   };
+}
+
+function resetPeriods_() {
+  const root = DriveApp.getFolderById(MASTER_FOLDER_ID);
+  const folders = root.getFoldersByName('PERIODOS GENERADOS');
+  let archived = 0;
+  const stamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'America/Bogota', 'yyyy-MM-dd HH-mm-ss');
+  while (folders.hasNext()) {
+    folders.next().setName('HISTÓRICO REINICIADO - ' + stamp + (archived ? ' - ' + (archived + 1) : ''));
+    archived += 1;
+  }
+  childFolder_(root, 'PERIODOS GENERADOS');
+  return { ok: true, archived: archived };
 }
 
 function createDocIn_(folder, title, subtitle) {
