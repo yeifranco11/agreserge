@@ -55,7 +55,7 @@ export async function consolidateDrivePeriod(input: {
 
 export async function importReportFile(input: {
   folderId: string;
-  fileUrl: string;
+  fileBase64: string;
   fileName: string;
   mimeType: string;
 }) {
@@ -71,6 +71,27 @@ export async function importReportFile(input: {
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || !payload?.ok) throw new Error(payload?.error || 'No se pudo guardar el archivo en Drive.');
+  return payload;
+}
+
+export async function createDriveSubreport(input: {
+  folderId: string;
+  title: string;
+  responsibleName: string;
+  order: number;
+}) {
+  const url = process.env.GOOGLE_APPS_SCRIPT_URL;
+  const secret = process.env.GOOGLE_APPS_SCRIPT_SECRET;
+  if (!url || !secret) throw new Error('La integración con Google Drive no está configurada.');
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action: 'createSubreport', secret, ...input }),
+    redirect: 'follow',
+    cache: 'no-store',
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || !payload?.ok) throw new Error(payload?.error || 'No se pudo crear el subinforme en Drive.');
   return payload;
 }
 

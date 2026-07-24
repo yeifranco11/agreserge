@@ -1830,6 +1830,7 @@ function Informes({ db, session }: any) {
   const [data, setData] = useState<any>({ periods: [], submissions: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [subreportDrafts, setSubreportDrafts] = useState<Record<string, any>>({});
   const load = async () => {
     setLoading(true);
     setError("");
@@ -1893,6 +1894,23 @@ function Informes({ db, session }: any) {
       "Coordinación Asistencial", "Coordinación General", "Coordinador General",
     ].includes(user.rol),
   );
+  const createSubreport = async (parentId: string) => {
+    const draft = subreportDrafts[parentId] || {};
+    if (!draft.titulo || !draft.responsableId) {
+      return alert("Escriba el nombre del subinforme y seleccione su responsable.");
+    }
+    await updateAssignment(
+      {
+        action: "create-subreport",
+        parentId,
+        titulo: draft.titulo,
+        responsableId: draft.responsableId,
+        orden: Number(draft.orden || 1),
+      },
+      "Subinforme creado y asignado. Ya aparece en el portal del responsable.",
+    );
+    setSubreportDrafts((current) => ({ ...current, [parentId]: {} }));
+  };
   return (
     <div className="grid reportWorkspace">
       <div className="card span12 reportHero">
@@ -1968,6 +1986,46 @@ function Informes({ db, session }: any) {
                         )}
                       />
                     </label>
+                  </div>
+                )}
+                {!item.parent_id && item.responsable_id === session.id && (
+                  <div className="subreportCreator">
+                    <b>Agregar un subinforme a este anexo</b>
+                    <input
+                      className="input"
+                      placeholder="Área o nombre del subinforme"
+                      value={subreportDrafts[item.id]?.titulo || ""}
+                      onChange={(e) => setSubreportDrafts((current) => ({
+                        ...current,
+                        [item.id]: { ...current[item.id], titulo: e.target.value },
+                      }))}
+                    />
+                    <select
+                      value={subreportDrafts[item.id]?.responsableId || ""}
+                      onChange={(e) => setSubreportDrafts((current) => ({
+                        ...current,
+                        [item.id]: { ...current[item.id], responsableId: e.target.value },
+                      }))}
+                    >
+                      <option value="">Seleccionar responsable</option>
+                      {leaders.map((user: Usuario) => (
+                        <option key={user.id} value={user.id}>{user.nombre} · {user.cargo || user.rol}</option>
+                      ))}
+                    </select>
+                    <input
+                      className="input orderInput"
+                      type="number"
+                      min="1"
+                      placeholder="Orden"
+                      value={subreportDrafts[item.id]?.orden || ""}
+                      onChange={(e) => setSubreportDrafts((current) => ({
+                        ...current,
+                        [item.id]: { ...current[item.id], orden: e.target.value },
+                      }))}
+                    />
+                    <button className="btn primary" disabled={loading} onClick={() => createSubreport(item.id)}>
+                      Crear y delegar
+                    </button>
                   </div>
                 )}
               </article>
