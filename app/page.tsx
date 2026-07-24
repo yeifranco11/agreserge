@@ -2151,6 +2151,31 @@ function AsignacionMensual({ db, session }: any) {
       setLoading(false);
     }
   };
+  const assignAnnex = async (annexId: string, responsableId: string) => {
+    if (!responsableId) return;
+    setData((current: any) => ({
+      ...current,
+      annexes: current.annexes.map((annex: any) =>
+        annex.id === annexId ? { ...annex, responsable_id: responsableId } : annex),
+      submissions: current.submissions.map((submission: any) =>
+        submission.annex_id === annexId && !submission.parent_id
+          ? { ...submission, responsable_id: responsableId, delegado_por_id: session.id }
+          : submission),
+    }));
+    await action(
+      { action: "assign-annex", annexId, responsableId },
+      "Responsable guardado. La asignación ya aparece en el portal de esa persona.",
+    );
+  };
+  const changeOrder = async (kind: "obligation" | "annex", id: string, orden: number) => {
+    if (!Number.isFinite(orden) || orden < 1) return;
+    const key = kind === "obligation" ? "obligations" : "annexes";
+    setData((current: any) => ({
+      ...current,
+      [key]: current[key].map((item: any) => item.id === id ? { ...item, orden } : item),
+    }));
+    await action({ action: `reorder-${kind}`, id, orden });
+  };
   const bootstrap = () => action({ action: "bootstrap-hgc" }, "Hospital Gonzalo Contreras parametrizado con 24 obligaciones, 27 anexos y líderes.");
   const reset = () => {
     if (confirm("Se eliminará el historial de meses abiertos del Hospital Gonzalo Contreras. Las cuentas y la parametrización se conservarán. ¿Continuar?"))
@@ -2253,6 +2278,22 @@ function AsignacionMensual({ db, session }: any) {
                       <b>Obligación contractual {obligation.numero}</b>
                       <p>{obligation.titulo}</p>
                     </div>
+                    <label className="structureOrder">
+                      <span>Orden en informe</span>
+                      <input
+                        className="input orderInput"
+                        type="number"
+                        min="1"
+                        value={obligation.orden}
+                        disabled={loading}
+                        onChange={(e) => setData((current: any) => ({
+                          ...current,
+                          obligations: current.obligations.map((item: any) =>
+                            item.id === obligation.id ? { ...item, orden: Number(e.target.value) } : item),
+                        }))}
+                        onBlur={(e) => changeOrder("obligation", obligation.id, Number(e.target.value))}
+                      />
+                    </label>
                   </div>
                   {annexes.length ? (
                     <div className="annexAssignmentRows">
@@ -2267,11 +2308,7 @@ function AsignacionMensual({ db, session }: any) {
                             <select
                               value={annex.responsable_id || ""}
                               disabled={loading}
-                              onChange={(e) => action({
-                                action: "assign-annex",
-                                annexId: annex.id,
-                                responsableId: e.target.value,
-                              })}
+                              onChange={(e) => assignAnnex(annex.id, e.target.value)}
                             >
                               <option value="">Seleccionar responsable</option>
                               {assignableUsers.map((user: Usuario) => (
@@ -2280,6 +2317,22 @@ function AsignacionMensual({ db, session }: any) {
                                 </option>
                               ))}
                             </select>
+                          </label>
+                          <label className="structureOrder">
+                            <span>Orden del anexo</span>
+                            <input
+                              className="input orderInput"
+                              type="number"
+                              min="1"
+                              value={annex.orden}
+                              disabled={loading}
+                              onChange={(e) => setData((current: any) => ({
+                                ...current,
+                                annexes: current.annexes.map((item: any) =>
+                                  item.id === annex.id ? { ...item, orden: Number(e.target.value) } : item),
+                              }))}
+                              onBlur={(e) => changeOrder("annex", annex.id, Number(e.target.value))}
+                            />
                           </label>
                         </div>
                       ))}
