@@ -1845,6 +1845,26 @@ function Informes({ db, session }: any) {
     }
   };
   useEffect(() => { load(); }, []);
+  const updateAssignment = async (body: any, successMessage: string) => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch("/api/agreserge-reports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error);
+      await load();
+      alert(successMessage);
+    } catch (e: any) {
+      setError(e.message || "No se pudo actualizar el subinforme");
+      alert(e.message || "No se pudo actualizar el subinforme");
+    } finally {
+      setLoading(false);
+    }
+  };
   const upload = async (id: string, file?: File) => {
     if (!file) return;
     setLoading(true);
@@ -1865,6 +1885,14 @@ function Informes({ db, session }: any) {
     }
   };
   const periodById = (id: string) => data.periods.find((period: any) => period.id === id);
+  const leaders = db.usuarios.filter((user: Usuario) =>
+    user.activo && user.entidadId === session.entidadId &&
+    [
+      "Líder de Proceso", "Líder Institucional", "Coordinador de Proceso AGRESERGE",
+      "Coordinadora Administrativa y Financiera", "Coordinación Administrativa",
+      "Coordinación Asistencial", "Coordinación General", "Coordinador General",
+    ].includes(user.rol),
+  );
   return (
     <div className="grid reportWorkspace">
       <div className="card span12 reportHero">
@@ -1881,6 +1909,7 @@ function Informes({ db, session }: any) {
         <div className="assignmentStack">
           {data.submissions.map((item: any) => {
             const period = periodById(item.period_id);
+            const controlsStructure = item.delegado_por_id === session.id;
             return (
               <article className={`assignmentLine ${item.parent_id ? "subreport" : ""}`} key={item.id}>
                 <div className="assignmentOrder">{item.parent_id ? "↳" : item.obligation?.numero || "•"}</div>
@@ -1910,6 +1939,37 @@ function Informes({ db, session }: any) {
                     onChange={(e) => upload(item.id, e.target.files?.[0])}
                   />
                 </label>
+                {controlsStructure && (
+                  <div className="assignmentActions leaderStructureControls">
+                    <span className="mini">Organizar subinforme</span>
+                    <select
+                      value={item.responsable_id || ""}
+                      disabled={loading}
+                      onChange={(e) => updateAssignment(
+                        { action: "delegate", id: item.id, responsableId: e.target.value },
+                        "Responsable del subinforme actualizado.",
+                      )}
+                    >
+                      {leaders.map((user: Usuario) => (
+                        <option key={user.id} value={user.id}>{user.nombre}</option>
+                      ))}
+                    </select>
+                    <label>
+                      <span className="mini">Orden</span>
+                      <input
+                        className="input orderInput"
+                        type="number"
+                        min="1"
+                        defaultValue={item.orden}
+                        disabled={loading}
+                        onBlur={(e) => updateAssignment(
+                          { action: "reorder", id: item.id, orden: Number(e.target.value) },
+                          "Orden del subinforme guardado.",
+                        )}
+                      />
+                    </label>
+                  </div>
+                )}
               </article>
             );
           })}
@@ -2191,6 +2251,13 @@ function AsignacionMensual({ db, session }: any) {
     const payload = await action({ action: "close-period", periodId });
     if (payload?.url) window.open(payload.url, "_blank", "noopener,noreferrer");
   };
+  const syncPeriod = async (periodId: string) => {
+    const payload = await action(
+      { action: "sync-period", periodId },
+      "Periodo sincronizado. Los responsables ya pueden ver, editar y cargar sus informes.",
+    );
+    if (payload?.folderUrl) window.open(payload.folderUrl, "_blank", "noopener,noreferrer");
+  };
   const upload = async (id: string, file?: File) => {
     if (!file) return;
     setLoading(true);
@@ -2356,6 +2423,11 @@ function AsignacionMensual({ db, session }: any) {
               <span className={`pill ${period.estado === "Cerrado" ? "ok" : "warn"}`}>{period.estado}</span>
               <div className="row">
                 {period.drive_folder_url && <a className="btn" href={period.drive_folder_url} target="_blank">Carpeta Drive</a>}
+                {period.estado !== "Cerrado" && isManager && (
+                  <button className="btn" disabled={loading} onClick={() => syncPeriod(period.id)}>
+                    Sincronizar responsables
+                  </button>
+                )}
                 {period.estado !== "Cerrado" && isManager && <button className="btn primary" onClick={() => close(period.id)}>Cerrar y consolidar</button>}
                 {period.consolidated_doc_url && <a className="btn primary" href={period.consolidated_doc_url} target="_blank">Informe editable</a>}
               </div>

@@ -28,6 +28,158 @@ async function context() {
   return { userId, db, actor, supabase: requireSupabaseAdmin() as any };
 }
 
+async function syncPeriodStructure({
+  supabase,
+  db,
+  actor,
+  period,
+}: {
+  supabase: any;
+  db: any;
+  actor: any;
+  period: any;
+}) {
+  const entity = period.entity || db.entidades.find((item: any) => item.id === period.entidad_id) || {
+    id: period.entidad_id,
+    nombre: HGC_ENTITY_NAME,
+  };
+  const obligationsResult = await supabase.from("agreserge_report_obligations")
+    .select("*").eq("entidad_id", period.entidad_id).eq("activa", true).order("orden");
+  if (obligationsResult.error) throw obligationsResult.error;
+  const obligationIds = (obligationsResult.data || []).map((item: any) => item.id);
+  if (!obligationIds.length) throw new Error("La entidad no tiene obligaciones parametrizadas");
+  const annexResult = await supabase.from("agreserge_report_annexes")
+    .select("*").in("obligation_id", obligationIds).eq("activa", true).order("orden");
+  if (annexResult.error) throw annexResult.error;
+  const users = db.usuarios;
+  const assignments = (annexResult.data || []).map((annex: any) => {
+    const obligation = (obligationsResult.data || []).find((item: any) => item.id === annex.obligation_id);
+    const responsible = users.find((item: any) => item.id === annex.responsable_id) || actor;
+    const subSource = annex.numero === 1 ? HGC_ADMIN_LEADERS : annex.numero === 3 ? HGC_ASSISTANCE_LEADERS : [];
+    const subinformes = subSource.map(([nombre, titulo], index) => {
+      const user = users.find((item: any) => slug(item.nombre) === slug(nombre));
+      return {
+        responsableId: user?.id || actor.id,
+        responsableNombre: nombre,
+        titulo,
+        orden: index + 1,
+      };
+    });
+    return {
+      obligation,
+      annex,
+      obligacion: obligation.numero,
+      obligacionOrden: obligation.orden,
+      anexo: annex.numero,
+      anexoOrden: annex.orden,
+      titulo: annex.titulo,
+      responsableId: responsible.id,
+      responsableNombre: responsible.nombre,
+      subinformes,
+    };
+  });
+  const drive = await openDrivePeriod({
+    hospital: entity.nombre,
+    mes: period.mes,
+    anio: String(period.anio),
+    obligations: (obligationsResult.data || []).map((obligation: any) => ({
+      obligacion: obligation.numero,
+      titulo: obligation.titulo,
+    })),
+    assignments,
+  });
+  const existingResult = await supabase.from("agreserge_report_submissions")
+    .select("*").eq("period_id", period.id).order("orden");
+  if (existingResult.error) throw existingResult.error;
+  const existing = existingResult.data || [];
+  let created = 0;
+  let updated = 0;
+  for (let index = 0; index < drive.items.length; index += 1) {
+    const item = drive.items[index];
+    const source = assignments[index];
+    if (!source) continue;
+    let parent = existing.find((row: any) => row.annex_id === source.annex.id && !row.parent_id);
+    const parentValues: any = {
+      period_id: period.id,
+      obligation_id: source.obligation.id,
+      annex_id: source.annex.id,
+      responsable_id: source.responsableId,
+      delegado_por_id: actor.id,
+      titulo: source.titulo,
+      orden: source.obligacionOrden * 1000 + source.anexoOrden * 100,
+      estado: parent?.estado || "Asignado",
+      drive_folder_id: item.folderId,
+      drive_folder_url: item.folderUrl,
+      updated_at: new Date().toISOString(),
+    };
+    if (!parent?.archivo_path) {
+      parentValues.drive_file_id = item.id;
+      parentValues.drive_file_url = item.url;
+    }
+    if (parent) {
+      const result = await supabase.from("agreserge_report_submissions")
+        .update(parentValues).eq("id", parent.id).select("*").single();
+      if (result.error) throw result.error;
+      parent = result.data;
+      updated += 1;
+    } else {
+      const result = await supabase.from("agreserge_report_submissions")
+        .insert({ id: randomUUID(), ...parentValues }).select("*").single();
+      if (result.error) throw result.error;
+      parent = result.data;
+      existing.push(parent);
+      created += 1;
+    }
+    const subitems = item.subitems || [];
+    for (let subIndex = 0; subIndex < subitems.length; subIndex += 1) {
+      const sub = subitems[subIndex];
+      const subOrder = source.obligacionOrden * 1000 + source.anexoOrden * 100 + Number(sub.orden || subIndex + 1);
+      let child = existing.find((row: any) =>
+        row.parent_id === parent.id &&
+        (row.drive_folder_id === sub.folderId || row.drive_file_id === sub.id || row.orden === subOrder));
+      const childValues: any = {
+        period_id: period.id,
+        obligation_id: source.obligation.id,
+        annex_id: source.annex.id,
+        parent_id: parent.id,
+        responsable_id: sub.responsableId,
+        delegado_por_id: source.responsableId,
+        titulo: sub.nombre,
+        orden: subOrder,
+        estado: child?.estado || "Asignado",
+        drive_folder_id: sub.folderId || item.folderId,
+        drive_folder_url: sub.folderUrl || item.folderUrl,
+        updated_at: new Date().toISOString(),
+      };
+      if (!child?.archivo_path) {
+        childValues.drive_file_id = sub.id;
+        childValues.drive_file_url = sub.url;
+      }
+      if (child) {
+        const result = await supabase.from("agreserge_report_submissions")
+          .update(childValues).eq("id", child.id).select("*").single();
+        if (result.error) throw result.error;
+        child = result.data;
+        updated += 1;
+      } else {
+        const result = await supabase.from("agreserge_report_submissions")
+          .insert({ id: randomUUID(), ...childValues }).select("*").single();
+        if (result.error) throw result.error;
+        child = result.data;
+        existing.push(child);
+        created += 1;
+      }
+    }
+  }
+  return {
+    folderId: drive.folderId,
+    folderUrl: drive.folderUrl,
+    created,
+    updated,
+    total: created + updated,
+  };
+}
+
 export async function GET(request: Request) {
   try {
     const { actor, supabase } = await context();
@@ -70,7 +222,7 @@ export async function POST(request: Request) {
     const canManageReports = canAdmin(actor) || reportManagers.includes(actor.rol);
     const managerActions = new Set([
       "bootstrap-hgc", "reset-periods", "open-period", "close-period",
-      "assign-annex", "reorder-obligation", "reorder-annex",
+      "assign-annex", "reorder-obligation", "reorder-annex", "sync-period",
     ]);
     if (managerActions.has(input.action) && !canManageReports) {
       return NextResponse.json({ error: "Perfil no autorizado para administrar informes" }, { status: 403 });
@@ -101,6 +253,14 @@ export async function POST(request: Request) {
         }).eq("annex_id", input.annexId).is("parent_id", null).in("period_id", periodIds).select("id");
         if (submissions.error) throw submissions.error;
         updatedAssignments = submissions.data?.length || 0;
+        const parentIds = (submissions.data || []).map((item: any) => item.id);
+        if (parentIds.length) {
+          const children = await supabase.from("agreserge_report_submissions").update({
+            delegado_por_id: responsible.id,
+            updated_at: new Date().toISOString(),
+          }).in("parent_id", parentIds);
+          if (children.error) throw children.error;
+        }
       }
       return NextResponse.json({
         ok: true,
@@ -235,74 +395,60 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true });
     }
 
+    if (input.action === "sync-period") {
+      const periodResult = await supabase.from("agreserge_report_periods")
+        .select("*, entity:agreserge_entities(*)").eq("id", input.periodId).single();
+      if (periodResult.error) throw periodResult.error;
+      if (periodResult.data.estado === "Cerrado") {
+        return NextResponse.json({ error: "No se puede reconstruir un periodo cerrado" }, { status: 400 });
+      }
+      const synced = await syncPeriodStructure({
+        supabase,
+        db,
+        actor,
+        period: periodResult.data,
+      });
+      const periodUpdate = await supabase.from("agreserge_report_periods").update({
+        drive_folder_id: synced.folderId,
+        drive_folder_url: synced.folderUrl,
+        updated_at: new Date().toISOString(),
+      }).eq("id", periodResult.data.id);
+      if (periodUpdate.error) throw periodUpdate.error;
+      return NextResponse.json({ ok: true, ...synced });
+    }
+
     if (input.action === "open-period") {
       const entidadId = input.entidadId || HGC_ENTITY_ID;
       const entity = db.entidades.find((item: any) => item.id === entidadId) || { id: entidadId, nombre: HGC_ENTITY_NAME };
-      const obligationsResult = await supabase.from("agreserge_report_obligations").select("*").eq("entidad_id", entidadId).eq("activa", true).order("orden");
-      if (obligationsResult.error) throw obligationsResult.error;
-      const obligationIds = (obligationsResult.data || []).map((item: any) => item.id);
-      const annexResult = await supabase.from("agreserge_report_annexes").select("*").in("obligation_id", obligationIds).eq("activa", true).order("orden");
-      if (annexResult.error) throw annexResult.error;
-      const users = db.usuarios;
-      const assignments = (annexResult.data || []).map((annex: any) => {
-        const obligation = (obligationsResult.data || []).find((item: any) => item.id === annex.obligation_id);
-        const responsible = users.find((item: any) => item.id === annex.responsable_id) || actor;
-        const subSource = annex.numero === 1 ? HGC_ADMIN_LEADERS : annex.numero === 3 ? HGC_ASSISTANCE_LEADERS : [];
-        const subinformes = subSource.map(([nombre, titulo], index) => {
-          const user = users.find((item: any) => slug(item.nombre) === slug(nombre));
-          return { responsableId: user?.id || actor.id, responsableNombre: nombre, titulo, orden: index + 1 };
-        });
-        return {
-          obligacion: obligation.numero,
-          obligacionOrden: obligation.orden,
-          anexo: annex.numero,
-          anexoOrden: annex.orden,
-          titulo: annex.titulo,
-          responsableId: responsible.id,
-          responsableNombre: responsible.nombre,
-          subinformes,
-        };
-      });
-      const obligations = (obligationsResult.data || []).map((obligation: any) => ({
-        obligacion: obligation.numero,
-        titulo: obligation.titulo,
-      }));
-      const drive = await openDrivePeriod({
-        hospital: entity.nombre,
-        mes: input.mes,
-        anio: String(input.anio),
-        obligations,
-        assignments,
-      });
       const periodId = randomUUID();
       const periodResult = await supabase.from("agreserge_report_periods").insert({
         id: periodId, entidad_id: entidadId, mes: input.mes, anio: Number(input.anio),
         fecha_limite: input.fechaLimite || null, coordinador_id: actor.id,
-        drive_folder_id: drive.folderId, drive_folder_url: drive.folderUrl,
-      });
+      }).select("*, entity:agreserge_entities(*)").single();
       if (periodResult.error) throw periodResult.error;
-      const rows: any[] = [];
-      drive.items.forEach((item: any, index: number) => {
-        const source = assignments[index];
-        const obligation = (obligationsResult.data || []).find((entry: any) => entry.numero === source.obligacion);
-        const annex = (annexResult.data || []).find((entry: any) => entry.obligation_id === obligation.id && entry.numero === source.anexo);
-        const parentId = randomUUID();
-        rows.push({
-          id: parentId, period_id: periodId, obligation_id: obligation.id, annex_id: annex?.id || null,
-          responsable_id: source.responsableId, delegado_por_id: actor.id, titulo: source.titulo,
-          orden: source.obligacionOrden * 1000 + source.anexoOrden * 100, estado: "Asignado",
-          drive_folder_id: item.folderId, drive_folder_url: item.folderUrl, drive_file_id: item.id, drive_file_url: item.url,
+      try {
+        const synced = await syncPeriodStructure({
+          supabase,
+          db,
+          actor,
+          period: { ...periodResult.data, entity },
         });
-        (item.subitems || []).forEach((sub: any) => rows.push({
-          id: randomUUID(), period_id: periodId, obligation_id: obligation.id, annex_id: annex?.id || null,
-          parent_id: parentId, responsable_id: sub.responsableId, delegado_por_id: source.responsableId,
-          titulo: sub.nombre, orden: source.obligacionOrden * 1000 + source.anexoOrden * 100 + sub.orden,
-          estado: "Asignado", drive_folder_id: sub.folderId || item.folderId, drive_folder_url: sub.folderUrl, drive_file_id: sub.id, drive_file_url: sub.url,
-        }));
-      });
-      const submissionsResult = await supabase.from("agreserge_report_submissions").insert(rows);
-      if (submissionsResult.error) throw submissionsResult.error;
-      return NextResponse.json({ ok: true, periodId, folderUrl: drive.folderUrl });
+        const periodUpdate = await supabase.from("agreserge_report_periods").update({
+          drive_folder_id: synced.folderId,
+          drive_folder_url: synced.folderUrl,
+          updated_at: new Date().toISOString(),
+        }).eq("id", periodId);
+        if (periodUpdate.error) throw periodUpdate.error;
+        return NextResponse.json({
+          ok: true,
+          periodId,
+          folderUrl: synced.folderUrl,
+          assignments: synced.total,
+        });
+      } catch (error) {
+        await supabase.from("agreserge_report_periods").delete().eq("id", periodId);
+        throw error;
+      }
     }
 
     if (input.action === "delegate" || input.action === "reorder") {

@@ -132,10 +132,14 @@ function consolidate_(input) {
   body.appendParagraph('ASOCIACIÓN GREMIAL SINDICAL DE PRESTACIONES DE SERVICIOS GENERALES Y DE SALUD DEL VALLE').setHeading(DocumentApp.ParagraphHeading.HEADING1);
   body.appendParagraph('INFORME DE EJECUCIÓN DE ACTIVIDADES').setHeading(DocumentApp.ParagraphHeading.TITLE);
   body.appendParagraph(String(input.hospital || '') + ' · ' + input.mes + ' ' + input.anio);
-  (input.items || []).sort(function(a,b){ return Number(a.obligacion)-Number(b.obligacion) || Number(a.orden)-Number(b.orden); }).forEach(function(item) {
-    body.appendPageBreak();
-    body.appendParagraph('OBLIGACIÓN CONTRACTUAL ' + item.obligacion).setHeading(DocumentApp.ParagraphHeading.HEADING1);
-    body.appendParagraph(item.obligacionTitulo || '');
+  let lastObligation = null;
+  (input.items || []).sort(function(a,b){ return Number(a.orden)-Number(b.orden); }).forEach(function(item) {
+    if (lastObligation !== item.obligacion) {
+      body.appendPageBreak();
+      body.appendParagraph('OBLIGACIÓN CONTRACTUAL ' + item.obligacion).setHeading(DocumentApp.ParagraphHeading.HEADING1);
+      body.appendParagraph(item.obligacionTitulo || '');
+      lastObligation = item.obligacion;
+    }
     body.appendParagraph('ANEXO ' + (item.anexo || 'S/A') + ' · ' + (item.titulo || '')).setHeading(DocumentApp.ParagraphHeading.HEADING2);
     const link = body.appendParagraph(item.url || 'Sin archivo cargado');
     if (item.url) link.setLinkUrl(item.url);
