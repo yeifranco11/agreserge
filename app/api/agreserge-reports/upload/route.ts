@@ -41,11 +41,10 @@ export async function POST(request: Request) {
     const path = `reports/${submission.data.period_id}/${id}/${Date.now()}-${safeName}`;
     const upload = await supabase.storage.from("agreserge-files").upload(path, file, { contentType: file.type, upsert: true });
     if (upload.error) throw upload.error;
-    const signed = await supabase.storage.from("agreserge-files").createSignedUrl(path, 600);
-    if (signed.error) throw signed.error;
+    const fileBase64 = Buffer.from(await file.arrayBuffer()).toString("base64");
     const drive = await importReportFile({
       folderId: submission.data.drive_folder_id,
-      fileUrl: signed.data.signedUrl,
+      fileBase64,
       fileName: file.name,
       mimeType: file.type,
     });

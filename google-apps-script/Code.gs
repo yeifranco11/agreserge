@@ -13,6 +13,7 @@ function doPost(e) {
     if (input.action === 'openPeriod') return json_(openPeriod_(input));
     if (input.action === 'consolidate') return json_(consolidate_(input));
     if (input.action === 'importReportFile') return json_(importReportFile_(input));
+    if (input.action === 'createSubreport') return json_(createSubreport_(input));
     if (input.action === 'lookupPayroll') return json_(lookupPayroll_(input));
     throw new Error('Acción no soportada');
   } catch (error) {
@@ -156,13 +157,31 @@ function consolidate_(input) {
 }
 
 function importReportFile_(input) {
-  if (!input.folderId || !input.fileUrl || !input.fileName) throw new Error('Archivo y carpeta son obligatorios');
-  const response = UrlFetchApp.fetch(input.fileUrl, { muteHttpExceptions: true });
-  if (response.getResponseCode() >= 300) throw new Error('No fue posible descargar el archivo temporal');
-  const blob = response.getBlob().setName(safe_(input.fileName));
+  if (!input.folderId || !input.fileBase64 || !input.fileName) throw new Error('Archivo y carpeta son obligatorios');
+  const bytes = Utilities.base64Decode(input.fileBase64);
+  const blob = Utilities.newBlob(bytes, input.mimeType || 'application/octet-stream', safe_(input.fileName));
   if (input.mimeType) blob.setContentType(input.mimeType);
   const file = DriveApp.getFolderById(input.folderId).createFile(blob);
   return { ok: true, id: file.getId(), url: file.getUrl(), name: file.getName() };
+}
+
+function createSubreport_(input) {
+  if (!input.folderId || !input.title) throw new Error('Carpeta y nombre del subinforme son obligatorios');
+  const parent = DriveApp.getFolderById(input.folderId);
+  const order = Math.max(1, Number(input.order || 1));
+  const title = safe_(input.title);
+  const responsible = safe_(input.responsibleName || 'RESPONSABLE');
+  const folder = childFolder_(parent, String(order).padStart(2, '0') + ' - ' + title);
+  const documentTitle = title + ' - ' + responsible;
+  const document = createDocIn_(folder, documentTitle, 'Subinforme delegado a ' + responsible);
+  return {
+    ok: true,
+    id: document.getId(),
+    url: document.getUrl(),
+    folderId: folder.getId(),
+    folderUrl: folder.getUrl(),
+    name: documentTitle
+  };
 }
 
 function createDocIn_(folder, title, subtitle) {

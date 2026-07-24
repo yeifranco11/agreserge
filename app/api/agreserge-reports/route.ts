@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { getSessionUserId, hashPassword } from "../../../lib/agreserge-auth";
 import { loadDB } from "../../../lib/agreserge-db";
 import { canAdmin } from "../../../lib/agreserge-permissions";
-import { consolidateDrivePeriod, openDrivePeriod } from "../../../lib/apps-script-drive";
+import { consolidateDrivePeriod, createDriveSubreport, openDrivePeriod } from "../../../lib/apps-script-drive";
 import {
   HGC_ADMIN_LEADERS,
   HGC_ASSISTANCE_LEADERS,
@@ -467,6 +467,52 @@ export async function POST(request: Request) {
       const result = await supabase.from("agreserge_report_submissions").update(updates).eq("id", input.id);
       if (result.error) throw result.error;
       return NextResponse.json({ ok: true });
+    }
+
+    if (input.action === "create-subreport") {
+      const parent = await supabase.from("agreserge_report_submissions")
+        .select("*").eq("id", input.parentId).is("parent_id", null).single();
+      if (parent.error) throw parent.error;
+      const ownsParent = parent.data.responsable_id === actor.id;
+      if (!canManageReports && !ownsParent) {
+        return NextResponse.json({ error: "Solo el responsable del anexo puede crear sus subinformes" }, { status: 403 });
+      }
+      const responsible = db.usuarios.find((user: any) => user.id === input.responsableId && user.activo);
+      if (!responsible) return NextResponse.json({ error: "Seleccione un responsable activo" }, { status: 400 });
+      const title = String(input.titulo || "").trim();
+      if (!title) return NextResponse.json({ error: "Escriba el nombre o área del subinforme" }, { status: 400 });
+      const siblings = await supabase.from("agreserge_report_submissions")
+        .select("orden").eq("parent_id", parent.data.id).order("orden", { ascending: false });
+      if (siblings.error) throw siblings.error;
+      const requestedOrder = Number(input.orden);
+      const order = Number.isFinite(requestedOrder) && requestedOrder > 0
+        ? Math.trunc(requestedOrder)
+        : Math.max(1, Number(siblings.data?.[0]?.orden || parent.data.orden) + 1);
+      const drive = await createDriveSubreport({
+        folderId: parent.data.drive_folder_id,
+        title,
+        responsibleName: responsible.nombre,
+        order,
+      });
+      const inserted = await supabase.from("agreserge_report_submissions").insert({
+        id: randomUUID(),
+        period_id: parent.data.period_id,
+        obligation_id: parent.data.obligation_id,
+        annex_id: parent.data.annex_id,
+        parent_id: parent.data.id,
+        responsable_id: responsible.id,
+        delegado_por_id: actor.id,
+        titulo: title,
+        orden: order,
+        estado: "Asignado",
+        drive_folder_id: drive.folderId,
+        drive_folder_url: drive.folderUrl,
+        drive_file_id: drive.id,
+        drive_file_url: drive.url,
+        updated_at: new Date().toISOString(),
+      }).select("*").single();
+      if (inserted.error) throw inserted.error;
+      return NextResponse.json({ ok: true, submission: inserted.data });
     }
 
     if (input.action === "close-period") {
