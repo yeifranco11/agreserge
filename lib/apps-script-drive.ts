@@ -74,6 +74,29 @@ export async function importReportFile(input: {
   return payload;
 }
 
+export async function importReportFromUrl(input: {
+  folderId: string;
+  fileUrl: string;
+  fileName: string;
+  mimeType: string;
+}) {
+  const url = process.env.GOOGLE_APPS_SCRIPT_URL;
+  const secret = process.env.GOOGLE_APPS_SCRIPT_SECRET;
+  if (!url || !secret) throw new Error('La integración con Google Drive no está configurada.');
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action: 'importReportFromUrl', secret, ...input }),
+    redirect: 'follow',
+    cache: 'no-store',
+  });
+  const raw = await response.text();
+  let payload: any = {};
+  try { payload = JSON.parse(raw); } catch {}
+  if (!response.ok || !payload?.ok) throw new Error(payload?.error || `Google Drive rechazó el archivo (${response.status}).`);
+  return payload;
+}
+
 export async function createDriveSubreport(input: {
   folderId: string;
   title: string;

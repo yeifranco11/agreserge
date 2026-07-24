@@ -13,6 +13,7 @@ function doPost(e) {
     if (input.action === 'openPeriod') return json_(openPeriod_(input));
     if (input.action === 'consolidate') return json_(consolidate_(input));
     if (input.action === 'importReportFile') return json_(importReportFile_(input));
+    if (input.action === 'importReportFromUrl') return json_(importReportFromUrl_(input));
     if (input.action === 'createSubreport') return json_(createSubreport_(input));
     if (input.action === 'resetPeriods') return json_(resetPeriods_(input));
     if (input.action === 'lookupPayroll') return json_(lookupPayroll_(input));
@@ -86,12 +87,9 @@ function openPeriod_(input) {
       );
       obligationFolders[number] = folder;
       const coverFolder = childFolder_(folder, '00 - PORTADA DE LA OBLIGACIÓN');
-      const coverTemplate = activityTemplateByNumber_(root, number);
-      const coverName = String(number).padStart(2, '0') + ' - ACTIVIDAD CONTRATADA - PORTADA';
-      if (!filesByName_(coverFolder, coverName).length) coverTemplate.makeCopy(coverName, coverFolder);
+      cleanupGeneratedDocs_(coverFolder);
     });
 
-    const annexTemplate = annexTemplate_(root);
     const items = (input.assignments || []).map(function (assignment) {
       const obligationNumber = Number(assignment.obligacion);
       const obligation = obligationFolders[obligationNumber] || childFolder_(
@@ -109,19 +107,14 @@ function openPeriod_(input) {
       const title = isDirectSupport
         ? String(input.anio) + '-' + String(input.mes).toUpperCase() + ' - SOPORTE OBLIGACIÓN ' + obligationNumber + ' - ' + safeName
         : String(input.anio) + '-' + String(input.mes).toUpperCase() + ' - ANEXO ' + assignment.anexo + ' - ' + safeName;
-      const existing = filesByName_(annex, title);
-      const copy = existing.length
-        ? existing[0]
-        : isDirectSupport
-          ? createDocIn_(annex, title, 'Soporte directo de la obligación contractual ' + obligationNumber)
-          : annexTemplate.makeCopy(title, annex);
+      cleanupGeneratedDocs_(annex);
       const subitems = (assignment.subinformes || []).sort(function(a,b){ return Number(a.orden)-Number(b.orden); }).map(function(sub) {
         const subFolder = childFolder_(annex, String(sub.orden).padStart(2, '0') + ' - ' + safe_(sub.titulo));
         const subTitle = title + ' - ' + safe_(sub.responsableNombre);
-        const subCopy = createDocIn_(subFolder, subTitle, sub.titulo);
-        return { responsableId: sub.responsableId, nombre: subTitle, id: subCopy.getId(), url: subCopy.getUrl(), folderId: subFolder.getId(), folderUrl: subFolder.getUrl(), orden: sub.orden };
+        cleanupGeneratedDocs_(subFolder);
+        return { responsableId: sub.responsableId, nombre: subTitle, id: null, url: null, folderId: subFolder.getId(), folderUrl: subFolder.getUrl(), orden: sub.orden };
       });
-      return { obligacion: assignment.obligacion, anexo: assignment.anexo, responsableId: assignment.responsableId, nombre: title, id: copy.getId(), url: copy.getUrl(), folderId: annex.getId(), folderUrl: annex.getUrl(), subitems: subitems };
+      return { obligacion: assignment.obligacion, anexo: assignment.anexo, responsableId: assignment.responsableId, nombre: title, id: null, url: null, folderId: annex.getId(), folderUrl: annex.getUrl(), subitems: subitems };
     });
     return { ok: true, folderId: month.getId(), folderUrl: month.getUrl(), items: items };
   } finally {
@@ -179,6 +172,17 @@ function importReportFile_(input) {
   return { ok: true, id: file.getId(), url: file.getUrl(), name: file.getName() };
 }
 
+function importReportFromUrl_(input) {
+  if (!input.folderId || !input.fileUrl || !input.fileName) throw new Error('Archivo y carpeta son obligatorios');
+  const response = UrlFetchApp.fetch(input.fileUrl, { muteHttpExceptions: true });
+  const status = response.getResponseCode();
+  if (status < 200 || status >= 300) throw new Error('No se pudo descargar el archivo temporal: HTTP ' + status);
+  const blob = response.getBlob().setName(safe_(input.fileName));
+  if (input.mimeType) blob.setContentType(input.mimeType);
+  const file = DriveApp.getFolderById(input.folderId).createFile(blob);
+  return { ok: true, id: file.getId(), url: file.getUrl(), name: file.getName() };
+}
+
 function createSubreport_(input) {
   if (!input.folderId || !input.title) throw new Error('Carpeta y nombre del subinforme son obligatorios');
   const parent = DriveApp.getFolderById(input.folderId);
@@ -187,15 +191,31 @@ function createSubreport_(input) {
   const responsible = safe_(input.responsibleName || 'RESPONSABLE');
   const folder = childFolder_(parent, String(order).padStart(2, '0') + ' - ' + title);
   const documentTitle = title + ' - ' + responsible;
-  const document = createDocIn_(folder, documentTitle, 'Subinforme delegado a ' + responsible);
   return {
     ok: true,
-    id: document.getId(),
-    url: document.getUrl(),
+    id: null,
+    url: null,
     folderId: folder.getId(),
     folderUrl: folder.getUrl(),
     name: documentTitle
   };
+}
+
+function cleanupGeneratedDocs_(folder) {
+  const files = folder.getFiles();
+  while (files.hasNext()) {
+    const file = files.next();
+    if (file.getMimeType() !== MimeType.GOOGLE_DOCS) continue;
+    const name = file.getName();
+    if (/^\d{4}-.+ - (ANEXO|SOPORTE OBLIGACIÓN) \d+ - /i.test(name) ||
+        /^\d{2} - ACTIVIDAD CONTRATADA - PORTADA$/i.test(name)) {
+      file.setTrashed(true);
+    }
+  }
+}
+
+function authorizeExternalRequest() {
+  UrlFetchApp.fetch('https://www.google.com/generate_204', { muteHttpExceptions: true });
 }
 
 function resetPeriods_() {
