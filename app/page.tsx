@@ -112,6 +112,44 @@ type ArchivoLocal = {
   dataUrl: string;
   fecha: string;
 };
+
+async function readJson(response: Response) {
+  const text = await response.text();
+  try { return JSON.parse(text); }
+  catch {
+    throw new Error(response.status === 413
+      ? "El archivo es demasiado grande para el canal de carga."
+      : `El servidor no pudo procesar la solicitud (${response.status}).`);
+  }
+}
+
+async function uploadReportFile(id: string, file: File) {
+  const metadata = { id, fileName: file.name, fileType: file.type, fileSize: file.size };
+  const prepareResponse = await fetch("/api/agreserge-reports/upload", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "prepare", ...metadata }),
+  });
+  const prepared = await readJson(prepareResponse);
+  if (!prepareResponse.ok) throw new Error(prepared.error || "No se pudo preparar la carga.");
+  const storageResponse = await fetch(prepared.signedUrl, {
+    method: "PUT",
+    headers: { "Content-Type": file.type, "x-upsert": "true" },
+    body: file,
+  });
+  if (!storageResponse.ok) {
+    const detail = await storageResponse.text().catch(() => "");
+    throw new Error(detail.includes("JWT issued at future")
+      ? "El reloj de seguridad se desincronizó. Intente nuevamente en unos segundos."
+      : `No se pudo almacenar el archivo (${storageResponse.status}).`);
+  }
+  const finalizeResponse = await fetch("/api/agreserge-reports/upload", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "finalize", path: prepared.path, ...metadata }),
+  });
+  const finalized = await readJson(finalizeResponse);
+  if (!finalizeResponse.ok) throw new Error(finalized.error || "No se pudo copiar el archivo a Drive.");
+  return finalized;
+}
 type Documento = {
   id: string;
   nombre: string;
@@ -1870,12 +1908,7 @@ function Informes({ db, session }: any) {
     if (!file) return;
     setLoading(true);
     try {
-      const body = new FormData();
-      body.append("id", id);
-      body.append("file", file);
-      const response = await fetch("/api/agreserge-reports/upload", { method: "POST", body });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error);
+      await uploadReportFile(id, file);
       await load();
       alert("Informe guardado correctamente en su carpeta de Google Drive.");
     } catch (e: any) {
@@ -2325,12 +2358,7 @@ function AsignacionMensual({ db, session }: any) {
     setLoading(true);
     setError("");
     try {
-      const body = new FormData();
-      body.append("id", id);
-      body.append("file", file);
-      const response = await fetch("/api/agreserge-reports/upload", { method: "POST", body });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error);
+      await uploadReportFile(id, file);
       await load();
       alert("Informe cargado y guardado en la carpeta correcta de Google Drive.");
     } catch (e: any) {
@@ -3120,13 +3148,24 @@ function Usuarios({ db, save }: any) {
     if (!usuario) return;
     const correo = prompt("Correo electrónico", u.correo)?.trim().toLowerCase();
     if (!correo) return;
+    const rol = prompt(`Perfil o rol institucional:\n${roles.join(" · ")}`, u.rol)?.trim() as Rol;
+    if (!rol || !roles.includes(rol)) return alert("Seleccione un perfil válido exactamente como aparece en la lista.");
+    const cargo = prompt("Área, servicio o cargo", u.cargo || "")?.trim() || "";
+    const tipo = prompt("Tipo de personal: Asistencial o Administrativo", u.tipo || "Administrativo")?.trim() as TipoPersonal;
+    if (!["Asistencial", "Administrativo"].includes(tipo)) return alert("El tipo debe ser Asistencial o Administrativo.");
+    const entidadId = prompt(
+      `Hospital o entidad (ID):\n${db.entidades.map((e: Entidad) => `${e.id} = ${e.nombre}`).join("\n")}`,
+      u.entidadId || "",
+    )?.trim() || "";
+    if (entidadId && !db.entidades.some((e: Entidad) => e.id === entidadId))
+      return alert("El hospital o entidad seleccionado no existe.");
     if (db.usuarios.some((x: Usuario) => x.id !== u.id && (x.usuario === usuario || x.correo === correo)))
       return alert("El usuario o el correo ya está registrado.");
     save(
       {
         ...db,
         usuarios: db.usuarios.map((x: Usuario) =>
-          x.id === u.id ? { ...x, nombre, usuario, correo } : x,
+          x.id === u.id ? { ...x, nombre, usuario, correo, rol, cargo, tipo, entidadId } : x,
         ),
       },
       `Datos de acceso actualizados: ${nombre}`,
@@ -3190,7 +3229,7 @@ function Usuarios({ db, save }: any) {
                   <br />
                   <span className="mini">@{u.usuario || u.correo} · {u.correo}</span>
                 </td>
-                <td>{u.rol}</td>
+                <td>{u.rol}<br /><span className="mini">{u.cargo || u.tipo || "Sin área"}</span></td>
                 <td>
                   <span className={`pill ${u.activo ? "ok" : "bad"}`}>
                     {u.activo ? "Activo" : "Inactivo"}
