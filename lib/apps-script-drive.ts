@@ -95,6 +95,22 @@ export async function createDriveSubreport(input: {
   return payload;
 }
 
+export async function resetDrivePeriods() {
+  const url = process.env.GOOGLE_APPS_SCRIPT_URL;
+  const secret = process.env.GOOGLE_APPS_SCRIPT_SECRET;
+  if (!url || !secret) throw new Error('La integración con Google Drive no está configurada.');
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action: 'resetPeriods', secret }),
+    redirect: 'follow',
+    cache: 'no-store',
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || !payload?.ok) throw new Error(payload?.error || 'No se pudo reiniciar el historial de Drive.');
+  return payload;
+}
+
 export async function lookupPayrollInDrive(documento: string) {
   const url = process.env.GOOGLE_APPS_SCRIPT_URL;
   const secret = process.env.GOOGLE_APPS_SCRIPT_SECRET;

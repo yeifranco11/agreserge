@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { getSessionUserId, hashPassword } from "../../../lib/agreserge-auth";
 import { loadDB } from "../../../lib/agreserge-db";
 import { canAdmin } from "../../../lib/agreserge-permissions";
-import { consolidateDrivePeriod, createDriveSubreport, openDrivePeriod } from "../../../lib/apps-script-drive";
+import { consolidateDrivePeriod, createDriveSubreport, openDrivePeriod, resetDrivePeriods } from "../../../lib/apps-script-drive";
 import {
   HGC_ADMIN_LEADERS,
   HGC_ASSISTANCE_LEADERS,
@@ -390,9 +390,27 @@ export async function POST(request: Request) {
     }
 
     if (input.action === "reset-periods") {
-      const result = await supabase.from("agreserge_report_periods").delete().eq("entidad_id", input.entidadId || HGC_ENTITY_ID);
+      const entidadId = input.entidadId || HGC_ENTITY_ID;
+      const periods = await supabase.from("agreserge_report_periods").select("id").eq("entidad_id", entidadId);
+      if (periods.error) throw periods.error;
+      const periodIds = (periods.data || []).map((period: any) => period.id);
+      let deletedAssignments = 0;
+      if (periodIds.length) {
+        const submissions = await supabase.from("agreserge_report_submissions")
+          .delete().in("period_id", periodIds).select("id");
+        if (submissions.error) throw submissions.error;
+        deletedAssignments = submissions.data?.length || 0;
+      }
+      const result = await supabase.from("agreserge_report_periods")
+        .delete().eq("entidad_id", entidadId).select("id");
       if (result.error) throw result.error;
-      return NextResponse.json({ ok: true });
+      const drive = await resetDrivePeriods();
+      return NextResponse.json({
+        ok: true,
+        deletedPeriods: result.data?.length || 0,
+        deletedAssignments,
+        archivedDriveFolders: drive.archived || 0,
+      });
     }
 
     if (input.action === "sync-period") {
