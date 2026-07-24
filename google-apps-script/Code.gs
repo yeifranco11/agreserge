@@ -98,14 +98,23 @@ function openPeriod_(input) {
         month,
         String(obligationNumber).padStart(2, '0') + ' - OBLIGACIÓN ' + obligationNumber
       );
+      const isDirectSupport = Number(assignment.anexo) === 0;
       const annex = childFolder_(
         obligation,
-        'ANEXO ' + String(assignment.anexo).padStart(2, '0') + ' - ' + safe_(assignment.titulo || 'INFORME')
+        isDirectSupport
+          ? '01 - SOPORTE DIRECTO DE LA OBLIGACIÓN'
+          : 'ANEXO ' + String(assignment.anexo).padStart(2, '0') + ' - ' + safe_(assignment.titulo || 'INFORME')
       );
       const safeName = String(assignment.responsableNombre || 'RESPONSABLE').replace(/[\\/:*?"<>|]/g, '-');
-      const title = String(input.anio) + '-' + String(input.mes).toUpperCase() + ' - ANEXO ' + assignment.anexo + ' - ' + safeName;
+      const title = isDirectSupport
+        ? String(input.anio) + '-' + String(input.mes).toUpperCase() + ' - SOPORTE OBLIGACIÓN ' + obligationNumber + ' - ' + safeName
+        : String(input.anio) + '-' + String(input.mes).toUpperCase() + ' - ANEXO ' + assignment.anexo + ' - ' + safeName;
       const existing = filesByName_(annex, title);
-      const copy = existing.length ? existing[0] : annexTemplate.makeCopy(title, annex);
+      const copy = existing.length
+        ? existing[0]
+        : isDirectSupport
+          ? createDocIn_(annex, title, 'Soporte directo de la obligación contractual ' + obligationNumber)
+          : annexTemplate.makeCopy(title, annex);
       const subitems = (assignment.subinformes || []).sort(function(a,b){ return Number(a.orden)-Number(b.orden); }).map(function(sub) {
         const subFolder = childFolder_(annex, String(sub.orden).padStart(2, '0') + ' - ' + safe_(sub.titulo));
         const subTitle = title + ' - ' + safe_(sub.responsableNombre);
@@ -142,7 +151,11 @@ function consolidate_(input) {
       body.appendParagraph(item.obligacionTitulo || '');
       lastObligation = item.obligacion;
     }
-    body.appendParagraph('ANEXO ' + (item.anexo || 'S/A') + ' · ' + (item.titulo || '')).setHeading(DocumentApp.ParagraphHeading.HEADING2);
+    body.appendParagraph(
+      Number(item.anexo) === 0
+        ? 'SOPORTE DIRECTO DE LA OBLIGACIÓN · ' + (item.titulo || '')
+        : 'ANEXO ' + (item.anexo || 'S/A') + ' · ' + (item.titulo || '')
+    ).setHeading(DocumentApp.ParagraphHeading.HEADING2);
     const link = body.appendParagraph(item.url || 'Sin archivo cargado');
     if (item.url) link.setLinkUrl(item.url);
     (item.subitems || []).sort(function(a,b){ return Number(a.orden)-Number(b.orden); }).forEach(function(sub) {

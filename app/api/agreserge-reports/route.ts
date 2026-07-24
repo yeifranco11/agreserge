@@ -364,7 +364,10 @@ export async function POST(request: Request) {
           titulo: obligation.title, orden: obligation.number, activa: true, updated_at: new Date().toISOString(),
         }, { onConflict: "entidad_id,numero" });
         if (obligationResult.error) throw obligationResult.error;
-        const annexRows = obligation.annexes.map((annex, index) => {
+        const annexDefinitions = obligation.annexes.length
+          ? obligation.annexes
+          : [{ number: 0, title: "Soporte directo de la obligación (PDF o Word)" }];
+        const annexRows = annexDefinitions.map((annex, index) => {
           const isAdministrative = annex.number === 1 || annex.number === 2;
           const isAssistance = annex.number === 3 || annex.number === 4;
           const current = currentAnnexes.find((item: any) =>
@@ -386,7 +389,13 @@ export async function POST(request: Request) {
           if (annexResult.error) throw annexResult.error;
         }
       }
-      return NextResponse.json({ ok: true, usersCreated: userRows.length, obligations: 24, annexes: 27 });
+      return NextResponse.json({
+        ok: true,
+        usersCreated: userRows.length,
+        obligations: 24,
+        annexes: 27,
+        directSupports: HGC_OBLIGATIONS.filter((obligation) => !obligation.annexes.length).length,
+      });
     }
 
     if (input.action === "reset-periods") {
