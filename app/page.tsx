@@ -1932,7 +1932,11 @@ function Informes({ db, session }: any) {
               <article className={`assignmentLine ${item.parent_id ? "subreport" : ""}`} key={item.id}>
                 <div className="assignmentOrder">{item.parent_id ? "↳" : item.obligation?.numero || "•"}</div>
                 <div className="assignmentInfo">
-                  <b>{item.parent_id ? "Subinforme" : `Anexo ${item.annex?.numero || "—"}`} · {item.titulo}</b>
+                  <b>{item.parent_id
+                    ? "Subinforme"
+                    : item.annex?.numero === 0
+                      ? "Soporte directo de la obligación"
+                      : `Anexo ${item.annex?.numero || "—"}`} · {item.titulo}</b>
                   <span>
                     Obligación {item.obligation?.numero || "—"} · {period?.mes || "Periodo"} {period?.anio || ""}
                     {" · "}{item.estado}
@@ -2425,7 +2429,7 @@ function AsignacionMensual({ db, session }: any) {
                       {annexes.map((annex: any) => (
                         <div className="annexAssignmentRow" key={annex.id}>
                           <div>
-                            <b>Anexo {annex.numero}</b>
+                            <b>{annex.numero === 0 ? "Soporte directo de la obligación" : `Anexo ${annex.numero}`}</b>
                             <span>{annex.titulo}</span>
                           </div>
                           <label>
@@ -2463,7 +2467,7 @@ function AsignacionMensual({ db, session }: any) {
                       ))}
                     </div>
                   ) : (
-                    <p className="mini">Esta obligación lleva portada y soportes, sin anexo numerado.</p>
+                    <p className="mini">Esta obligación lleva portada y soporte directo en PDF o Word, sin anexo numerado.</p>
                   )}
                 </section>
               );
