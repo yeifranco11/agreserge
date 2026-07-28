@@ -69,11 +69,12 @@ export function seedDB() {
       {id:'u6',nombre:'Experiencia al Agremiado',correo:'experiencia@agreserge.com',clave:'1234',rol:'Experiencia al Agremiado',activo:true},
       {id:'u7',nombre:'Líder Urgencias HGC',correo:'lider@agreserge.com',clave:'1234',rol:'Líder Institucional',entidadId:'hgc',areaId:'urg',activo:true,cargo:'Líder institucional'},
       {id:'u8',nombre:'Coordinador de Proceso AGRESERGE',correo:'proceso@agreserge.com',clave:'1234',rol:'Coordinador de Proceso AGRESERGE',activo:true},
-      {id:'u9',nombre:'Agremiado Demo',correo:'agremiado@agreserge.com',clave:'1234',rol:'Agremiado',tipo:'Asistencial',entidadId:'hgc',areaId:'urg',liderId:'u7',activo:true,cargo:'Auxiliar de enfermería'},
     ],
     entidades:[
       {id:'hgc',nombre:'Hospital Gonzalo Contreras E.S.E.',nit:'891.900.XXX-1',ciudad:'La Unión, Valle',direccion:'La Unión, Valle'},
       {id:'hsf',nombre:'Hospital Sagrada Familia E.S.E.',nit:'891.900.XXX-2',ciudad:'Toro, Valle',direccion:'Toro, Valle'},
+      {id:'hsv',nombre:'Hospital Henry Valencia Orozco E.S.E.',nit:'',ciudad:'Versalles, Valle',direccion:'Versalles, Valle'},
+      {id:'oficina-agreserge',nombre:'Oficina AGRESERGE',nit:'',ciudad:'Valle del Cauca',direccion:'Valle del Cauca'},
     ],
     areas:[
       {id:'urg',nombre:'Urgencias',entidadId:'hgc',tipo:'Asistencial',liderId:'u7'},
@@ -81,7 +82,7 @@ export function seedDB() {
       {id:'adm',nombre:'Administrativa y financiera',entidadId:'hgc',tipo:'Administrativo'},
       {id:'fac',nombre:'Facturación',entidadId:'hsf',tipo:'Administrativo'},
     ],
-    documentos:{ u9: supportDocs('Asistencial', 'u9') },
+    documentos:{},
     permisos: defaultPermissions,
     asignacionesBase:[],
     asignacionesMensuales:[],

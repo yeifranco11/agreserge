@@ -11,6 +11,7 @@ import {
   HGC_ENTITY_NAME,
   HGC_OBLIGATIONS,
 } from "../../../lib/hgc-report-config";
+import { reportConfigFor } from "../../../lib/hospital-report-config";
 import { requireSupabaseAdmin } from "../../../lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
@@ -221,7 +222,7 @@ export async function POST(request: Request) {
     ];
     const canManageReports = canAdmin(actor) || reportManagers.includes(actor.rol);
     const managerActions = new Set([
-      "bootstrap-hgc", "reset-periods", "open-period", "close-period",
+      "bootstrap-hgc", "bootstrap-entity", "reset-periods", "open-period", "close-period",
       "assign-annex", "reorder-obligation", "reorder-annex", "sync-period",
     ]);
     if (managerActions.has(input.action) && !canManageReports) {
@@ -321,18 +322,23 @@ export async function POST(request: Request) {
       });
     }
 
-    if (input.action === "bootstrap-hgc") {
+    if (input.action === "bootstrap-hgc" || input.action === "bootstrap-entity") {
+      const entityId = String(input.entidadId || HGC_ENTITY_ID);
+      const config = reportConfigFor(entityId);
+      if (!config) {
+        return NextResponse.json({ error: "Esta entidad todavía no tiene obligaciones contractuales configuradas" }, { status: 400 });
+      }
       await supabase.from("agreserge_entities").upsert({
-        id: HGC_ENTITY_ID, nombre: HGC_ENTITY_NAME, ciudad: "La Unión, Valle del Cauca", updated_at: new Date().toISOString(),
+        id: config.id, nombre: config.name, ciudad: config.city, updated_at: new Date().toISOString(),
       });
       const existing = db.usuarios;
       const adminCoordinator = existing.find((u: any) => ["Coordinadora Administrativa y Financiera", "Coordinación Administrativa"].includes(u.rol));
       const assistanceCoordinator = existing.find((u: any) => u.rol === "Coordinación Asistencial");
       const generalCoordinator = existing.find((u: any) => ["Coordinador General", "Coordinación General", "Director Ejecutivo", "Administrador de Sistemas"].includes(u.rol)) || actor;
-      const leaders = [
+      const leaders = entityId === HGC_ENTITY_ID ? [
         ...HGC_ADMIN_LEADERS.map(([nombre, area], index) => ({ nombre, area, group: "administrativo", index })),
         ...HGC_ASSISTANCE_LEADERS.map(([nombre, area], index) => ({ nombre, area, group: "asistencial", index })),
-      ];
+      ] : [];
       const userRows = leaders.map(({ nombre, area, group }) => {
         const usuario = slug(nombre);
         const current = existing.find((u: any) => slug(u.nombre) === usuario);
@@ -344,23 +350,33 @@ export async function POST(request: Request) {
           clave_hash: current ? undefined : hashPassword("Agreserge2026!"),
           rol: "Líder de Proceso",
           tipo: group === "asistencial" ? "Asistencial" : "Administrativo",
-          entidad_id: HGC_ENTITY_ID,
+          entidad_id: entityId,
           activo: true,
           cargo: area,
           updated_at: new Date().toISOString(),
         };
       }).map((row) => Object.fromEntries(Object.entries(row).filter(([, value]) => value !== undefined)));
-      const usersResult = await supabase.from("agreserge_users").upsert(userRows, { onConflict: "id" });
-      if (usersResult.error) throw usersResult.error;
+      if (userRows.length) {
+        const usersResult = await supabase.from("agreserge_users").upsert(userRows, { onConflict: "id" });
+        if (usersResult.error) throw usersResult.error;
+      }
 
-      const currentAnnexesResult = await supabase.from("agreserge_report_annexes")
-        .select("*");
+      const currentObligationsResult = await supabase.from("agreserge_report_obligations")
+        .select("*").eq("entidad_id", entityId);
+      if (currentObligationsResult.error) throw currentObligationsResult.error;
+      const currentObligations = currentObligationsResult.data || [];
+      const currentObligationIds = currentObligations.map((item: any) => item.id);
+      const currentAnnexesResult = currentObligationIds.length
+        ? await supabase.from("agreserge_report_annexes").select("*").in("obligation_id", currentObligationIds)
+        : { data: [], error: null };
       if (currentAnnexesResult.error) throw currentAnnexesResult.error;
       const currentAnnexes = currentAnnexesResult.data || [];
-      for (const obligation of HGC_OBLIGATIONS) {
-        const obligationId = `00000000-0000-4000-8000-${String(obligation.number).padStart(12, "0")}`;
+      const activeAnnexIds: string[] = [];
+      for (const obligation of config.obligations) {
+        const currentObligation = currentObligations.find((item: any) => item.numero === obligation.number);
+        const obligationId = currentObligation?.id || randomUUID();
         const obligationResult = await supabase.from("agreserge_report_obligations").upsert({
-          id: obligationId, entidad_id: HGC_ENTITY_ID, numero: obligation.number,
+          id: obligationId, entidad_id: entityId, numero: obligation.number,
           titulo: obligation.title, orden: obligation.number, activa: true, updated_at: new Date().toISOString(),
         }, { onConflict: "entidad_id,numero" });
         if (obligationResult.error) throw obligationResult.error;
@@ -384,17 +400,36 @@ export async function POST(request: Request) {
             updated_at: new Date().toISOString(),
           };
         });
+        activeAnnexIds.push(...annexRows.map((row) => row.id));
         if (annexRows.length) {
           const annexResult = await supabase.from("agreserge_report_annexes").upsert(annexRows, { onConflict: "id" });
           if (annexResult.error) throw annexResult.error;
         }
       }
+      if (currentAnnexes.length) {
+        const obsoleteIds = currentAnnexes
+          .filter((item: any) => !activeAnnexIds.includes(item.id))
+          .map((item: any) => item.id);
+        if (obsoleteIds.length) {
+          const deactivate = await supabase.from("agreserge_report_annexes")
+            .update({ activa: false, updated_at: new Date().toISOString() })
+            .in("id", obsoleteIds);
+          if (deactivate.error) throw deactivate.error;
+        }
+      }
+      await supabase.from("agreserge_entities").upsert({
+        id: "oficina-agreserge",
+        nombre: "Oficina AGRESERGE",
+        ciudad: "Valle del Cauca",
+        updated_at: new Date().toISOString(),
+      });
       return NextResponse.json({
         ok: true,
         usersCreated: userRows.length,
-        obligations: 24,
-        annexes: 27,
-        directSupports: HGC_OBLIGATIONS.filter((obligation) => !obligation.annexes.length).length,
+        entity: config.name,
+        obligations: config.obligations.length,
+        annexes: config.obligations.reduce((total, obligation) => total + obligation.annexes.length, 0),
+        directSupports: config.obligations.filter((obligation) => !obligation.annexes.length).length,
       });
     }
 
@@ -565,7 +600,12 @@ export async function POST(request: Request) {
         consolidated_doc_id: drive.id, consolidated_doc_url: drive.url, updated_at: new Date().toISOString(),
       }).eq("id", input.periodId);
       if (update.error) throw update.error;
-      return NextResponse.json({ ok: true, url: drive.url, wordUrl: drive.wordUrl });
+      return NextResponse.json({
+        ok: true,
+        url: drive.url,
+        wordUrl: drive.wordUrl,
+        pdfFolderUrl: drive.pdfFolderUrl,
+      });
     }
 
     return NextResponse.json({ error: "Acción no soportada" }, { status: 400 });

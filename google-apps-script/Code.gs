@@ -130,7 +130,10 @@ function consolidate_(input) {
   const month = childFolder_(year, String(input.mes).toUpperCase());
   const name = 'INFORME DE EJECUCIÓN - ' + safe_(input.hospital || '') + ' - ' + String(input.mes).toUpperCase() + ' ' + input.anio;
   const old = filesByName_(month, name);
-  if (old.length) return { ok: true, id: old[0].getId(), url: old[0].getUrl() };
+  old.forEach(function(file) { file.setTrashed(true); });
+  const annexPdfs = childFolder_(month, 'PDF CONSOLIDADO POR ANEXO');
+  const oldPdfs = annexPdfs.getFiles();
+  while (oldPdfs.hasNext()) oldPdfs.next().setTrashed(true);
   const doc = DocumentApp.create(name);
   const body = doc.getBody();
   body.appendParagraph('ASOCIACIÓN GREMIAL SINDICAL DE PRESTACIONES DE SERVICIOS GENERALES Y DE SALUD DEL VALLE').setHeading(DocumentApp.ParagraphHeading.HEADING1);
@@ -160,7 +163,44 @@ function consolidate_(input) {
   doc.saveAndClose();
   const file = DriveApp.getFileById(doc.getId());
   file.moveTo(month);
-  return { ok: true, id: file.getId(), url: file.getUrl(), wordUrl: 'https://docs.google.com/document/d/' + file.getId() + '/export?format=docx' };
+  (input.items || []).sort(function(a,b){ return Number(a.orden)-Number(b.orden); }).forEach(function(item) {
+    const annexLabel = Number(item.anexo) === 0
+      ? 'SOPORTE OBLIGACIÓN ' + item.obligacion
+      : (Number(item.anexo) === 16 && /16 y 17/i.test(String(item.titulo || '')))
+        ? 'ANEXO 16 Y 17'
+        : 'ANEXO ' + item.anexo;
+    const annexName = String(item.obligacion).padStart(2, '0') + ' - ' + annexLabel + ' - ' + safe_(item.titulo || '');
+    const annexDoc = DocumentApp.create(annexName);
+    const annexBody = annexDoc.getBody();
+    annexBody.appendParagraph('AGRESERGE DEL VALLE').setHeading(DocumentApp.ParagraphHeading.HEADING1);
+    annexBody.appendParagraph('INFORME DE EJECUCIÓN DE ACTIVIDADES').setHeading(DocumentApp.ParagraphHeading.TITLE);
+    annexBody.appendParagraph(String(input.hospital || '') + ' · ' + String(input.mes).toUpperCase() + ' ' + input.anio);
+    annexBody.appendHorizontalRule();
+    annexBody.appendParagraph('OBLIGACIÓN CONTRACTUAL ' + item.obligacion).setHeading(DocumentApp.ParagraphHeading.HEADING1);
+    annexBody.appendParagraph(item.obligacionTitulo || '');
+    annexBody.appendParagraph(annexLabel + ' · ' + (item.titulo || '')).setHeading(DocumentApp.ParagraphHeading.HEADING2);
+    annexBody.appendParagraph('Responsable: ' + (item.responsableNombre || 'Sin asignar'));
+    const principal = annexBody.appendParagraph(item.url || 'Sin archivo principal cargado');
+    if (item.url) principal.setLinkUrl(item.url);
+    (item.subitems || []).sort(function(a,b){ return Number(a.orden)-Number(b.orden); }).forEach(function(sub, index) {
+      annexBody.appendParagraph((index + 1) + '. ' + sub.titulo).setHeading(DocumentApp.ParagraphHeading.HEADING3);
+      annexBody.appendParagraph('Responsable: ' + (sub.responsableNombre || 'Sin asignar'));
+      const support = annexBody.appendParagraph(sub.url || 'Pendiente de cargue');
+      if (sub.url) support.setLinkUrl(sub.url);
+    });
+    annexDoc.saveAndClose();
+    const annexFile = DriveApp.getFileById(annexDoc.getId());
+    const pdf = annexFile.getAs(MimeType.PDF).setName(annexName + '.pdf');
+    annexPdfs.createFile(pdf);
+    annexFile.setTrashed(true);
+  });
+  return {
+    ok: true,
+    id: file.getId(),
+    url: file.getUrl(),
+    wordUrl: 'https://docs.google.com/document/d/' + file.getId() + '/export?format=docx',
+    pdfFolderUrl: annexPdfs.getUrl()
+  };
 }
 
 function importReportFile_(input) {

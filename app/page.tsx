@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import {
   askAgrebot,
+  changeOwnPassword,
   createDigitalRequest,
   decideDigitalRequest,
   deleteDocument,
@@ -39,6 +40,7 @@ import {
   saveRemoteDB,
   uploadDocument,
 } from "../lib/agreserge-client";
+import { reportAnnexLabel } from "../lib/hospital-report-config";
 import { driveTemplate } from "../lib/drive-templates";
 import { NominaComprobantes, SolicitudesFirmas } from "./components/operations";
 import {
@@ -124,18 +126,27 @@ async function readJson(response: Response) {
 }
 
 async function uploadReportFile(id: string, file: File) {
-  const metadata = { id, fileName: file.name, fileType: file.type, fileSize: file.size };
-  const prepareResponse = await fetch("/api/agreserge-reports/upload", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "prepare", ...metadata }),
-  });
-  const prepared = await readJson(prepareResponse);
-  if (!prepareResponse.ok) throw new Error(prepared.error || "No se pudo preparar la carga.");
-  const storageResponse = await fetch(prepared.signedUrl, {
-    method: "PUT",
-    headers: { "Content-Type": file.type, "x-upsert": "true" },
-    body: file,
-  });
+  const metadata = { id, fileName: file.name, fileType: file.type || "application/octet-stream", fileSize: file.size };
+  let prepared: any;
+  let storageResponse: Response | undefined;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const prepareResponse = await fetch("/api/agreserge-reports/upload", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "prepare", ...metadata }),
+    });
+    prepared = await readJson(prepareResponse);
+    if (!prepareResponse.ok) throw new Error(prepared.error || "No se pudo preparar la carga.");
+    storageResponse = await fetch(prepared.signedUrl, {
+      method: "PUT",
+      headers: { "Content-Type": metadata.fileType, "x-upsert": "true" },
+      body: file,
+    });
+    if (storageResponse.ok) break;
+    const detail = await storageResponse.clone().text().catch(() => "");
+    if (!detail.includes("JWT issued at future") || attempt === 2) break;
+    await new Promise((resolve) => setTimeout(resolve, 1500 * (attempt + 1)));
+  }
+  if (!storageResponse) throw new Error("No se pudo iniciar la carga.");
   if (!storageResponse.ok) {
     const detail = await storageResponse.text().catch(() => "");
     throw new Error(detail.includes("JWT issued at future")
@@ -439,19 +450,6 @@ const seed = (): DB => ({
       rol: "Coordinador de Proceso AGRESERGE",
       activo: true,
     },
-    {
-      id: "u9",
-      nombre: "Agremiado Demo",
-      correo: "agremiado@agreserge.com",
-      clave: "1234",
-      rol: "Agremiado",
-      tipo: "Asistencial",
-      entidadId: "hgc",
-      areaId: "urg",
-      liderId: "u7",
-      activo: true,
-      cargo: "Auxiliar de enfermería",
-    },
   ],
   entidades: [
     {
@@ -467,6 +465,20 @@ const seed = (): DB => ({
       nit: "891.900.XXX-2",
       ciudad: "Toro, Valle",
       direccion: "Toro, Valle",
+    },
+    {
+      id: "hsv",
+      nombre: "Hospital Henry Valencia Orozco E.S.E.",
+      nit: "",
+      ciudad: "Versalles, Valle",
+      direccion: "Versalles, Valle",
+    },
+    {
+      id: "oficina-agreserge",
+      nombre: "Oficina AGRESERGE",
+      nit: "",
+      ciudad: "Valle del Cauca",
+      direccion: "Valle del Cauca",
     },
   ],
   areas: [
@@ -496,7 +508,7 @@ const seed = (): DB => ({
       tipo: "Administrativo",
     },
   ],
-  documentos: { u9: soportes("Asistencial", "u9") },
+  documentos: {},
   permisos: {
     Agremiado: [
       "Ficha técnica",
@@ -670,6 +682,20 @@ export default function Page() {
     await remoteLogout();
     setSession(null);
   };
+  const cambiarMiClave = async () => {
+    const actual = prompt("Escribe tu contraseña actual");
+    if (!actual) return;
+    const nueva = prompt("Escribe tu nueva contraseña (mínimo 8 caracteres)");
+    if (!nueva) return;
+    const confirmar = prompt("Confirma la nueva contraseña");
+    if (nueva !== confirmar) return alert("Las contraseñas nuevas no coinciden.");
+    try {
+      await changeOwnPassword(actual, nueva);
+      alert("Contraseña actualizada correctamente.");
+    } catch (error: any) {
+      alert(error.message || "No se pudo cambiar la contraseña.");
+    }
+  };
   return (
     <div className="app">
       <aside className="side">
@@ -698,6 +724,9 @@ export default function Page() {
             </button>
           ))}
         </nav>
+        <button className="btn ghost" onClick={cambiarMiClave}>
+          <KeyRound size={16} /> Cambiar mi clave
+        </button>
         <button className="btn ghost" onClick={salir}>
           <LogOut size={16} /> Salir
         </button>
@@ -1123,6 +1152,7 @@ function KPI({ t, n, i }: any) {
   );
 }
 function Parametros({ db, save }: any) {
+  const [contractPreview, setContractPreview] = useState<any>(null);
   const [ent, setEnt] = useState<any>({
     nombre: "",
     nit: "",
@@ -1265,17 +1295,31 @@ function Parametros({ db, save }: any) {
               onChange={(ev) => contrato(e.id, ev.target.files?.[0])}
             />
             {e.contrato && (
-              <a
-                className="btn"
-                href={e.contrato.dataUrl}
-                download={e.contrato.nombre}
-              >
-                <Download size={14} /> Descargar
-              </a>
+              <div className="row">
+                <button className="btn" onClick={() => setContractPreview({ ...e.contrato, entidad: e.nombre })}>
+                  <Eye size={14} /> Previsualizar
+                </button>
+                <a className="btn" href={e.contrato.dataUrl} download={e.contrato.nombre}>
+                  <Download size={14} /> Descargar
+                </a>
+              </div>
             )}
           </div>
         ))}
       </div>
+      {contractPreview && (
+        <div className="previewOverlay" onClick={() => setContractPreview(null)}>
+          <div className="previewModal" onClick={(event) => event.stopPropagation()}>
+            <div className="sectionTitleRow">
+              <div><span className="badge">CONTRATO INSTITUCIONAL</span><h3>{contractPreview.entidad}</h3><p>{contractPreview.nombre}</p></div>
+              <button className="btn" onClick={() => setContractPreview(null)}><XCircle size={16} /> Cerrar</button>
+            </div>
+            {String(contractPreview.tipo).includes("pdf") || String(contractPreview.tipo).startsWith("image/")
+              ? <iframe title="Previsualización del contrato" src={contractPreview.dataUrl} className="documentFrame" />
+              : <div className="emptyState"><FileText size={42} /><b>Vista previa externa</b><span>Word y Excel se abren en una nueva pestaña para conservar su formato.</span><a className="btn primary" href={contractPreview.dataUrl} target="_blank" rel="noreferrer">Abrir documento</a></div>}
+          </div>
+        </div>
+      )}
       <div className="card span12">
         <h3>Asignar líderes a áreas de hospitales</h3>
         <table className="table">
@@ -1864,8 +1908,14 @@ function MisAgremiados({ db, session }: any) {
     </div>
   );
 }
+const drivePreviewUrl = (url = "") =>
+  url.includes("drive.google.com/file/d/")
+    ? url.replace(/\/view(?:\?.*)?$/, "/preview")
+    : url;
+
 function Informes({ db, session }: any) {
   const [data, setData] = useState<any>({ periods: [], submissions: [] });
+  const [preview, setPreview] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [subreportDrafts, setSubreportDrafts] = useState<Record<string, any>>({});
@@ -1975,9 +2025,12 @@ function Informes({ db, session }: any) {
                     {" · "}{item.estado}
                   </span>
                   {item.drive_file_url && (
-                    <a href={item.drive_file_url} target="_blank" rel="noreferrer" className="link">
-                      <LinkIcon size={14} /> Abrir y diligenciar formato asignado
-                    </a>
+                    <div className="row">
+                      <button className="btn" onClick={() => setPreview(item)}><Eye size={14} /> Previsualizar cargue</button>
+                      <a href={item.drive_file_url} target="_blank" rel="noreferrer" className="link">
+                        <LinkIcon size={14} /> Abrir documento
+                      </a>
+                    </div>
                   )}
                   {item.drive_folder_url && (
                     <a href={item.drive_folder_url} target="_blank" rel="noreferrer" className="link">
@@ -2077,6 +2130,14 @@ function Informes({ db, session }: any) {
           )}
         </div>
       </div>
+      {preview && (
+        <div className="previewOverlay" onClick={() => setPreview(null)}>
+          <div className="previewModal" onClick={(event) => event.stopPropagation()}>
+            <div className="sectionTitleRow"><div><span className="badge">VISTA PREVIA</span><h3>{preview.archivo_nombre || preview.titulo}</h3></div><button className="btn" onClick={() => setPreview(null)}>Cerrar</button></div>
+            <iframe className="documentFrame" title="Documento del informe" src={drivePreviewUrl(preview.drive_file_url)} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2331,7 +2392,10 @@ function AsignacionMensual({ db, session }: any) {
     }));
     await action({ action: `reorder-${kind}`, id, orden });
   };
-  const bootstrap = () => action({ action: "bootstrap-hgc" }, "Hospital Gonzalo Contreras parametrizado con 24 obligaciones, 27 anexos y líderes.");
+  const bootstrap = () => action(
+    { action: "bootstrap-entity", entidadId: form.entidadId },
+    "Entidad parametrizada con sus obligaciones y anexos contractuales.",
+  );
   const reset = () => {
     if (confirm("Se eliminará el historial de meses abiertos del Hospital Gonzalo Contreras. Las cuentas y la parametrización se conservarán. ¿Continuar?"))
       action({ action: "reset-periods", entidadId: form.entidadId }, "Periodos anteriores eliminados. Puede comenzar desde cero.");
@@ -2344,7 +2408,8 @@ function AsignacionMensual({ db, session }: any) {
   const close = async (periodId: string) => {
     if (!confirm("¿Cerrar el mes y generar el informe consolidado editable?")) return;
     const payload = await action({ action: "close-period", periodId });
-    if (payload?.url) window.open(payload.url, "_blank", "noopener,noreferrer");
+    if (payload?.pdfFolderUrl) window.open(payload.pdfFolderUrl, "_blank", "noopener,noreferrer");
+    else if (payload?.url) window.open(payload.url, "_blank", "noopener,noreferrer");
   };
   const syncPeriod = async (periodId: string) => {
     const payload = await action(
@@ -2368,7 +2433,7 @@ function AsignacionMensual({ db, session }: any) {
       setLoading(false);
     }
   };
-  const selectedPeriod = data.periods[0];
+  const selectedPeriod = data.periods.find((period: any) => period.entidad_id === form.entidadId);
   const visibleSubmissions = selectedPeriod
     ? data.submissions.filter((item: any) => item.period_id === selectedPeriod.id)
     : data.submissions;
@@ -2406,7 +2471,7 @@ function AsignacionMensual({ db, session }: any) {
             <div className="field"><label>Fecha límite</label><input className="input" type="date" value={form.fechaLimite} onChange={(e) => setForm({ ...form, fechaLimite: e.target.value })} /></div>
           </div>
           <div className="row">
-            <button className="btn" disabled={loading} onClick={bootstrap}>Parametrizar HGC y crear líderes</button>
+            <button className="btn" disabled={loading} onClick={bootstrap}>Parametrizar entidad seleccionada</button>
             <button className="btn primary" disabled={loading} onClick={open}>Abrir mes y crear carpetas</button>
             <button className="btn danger" disabled={loading} onClick={reset}>Reiniciar meses abiertos</button>
           </div>
@@ -2425,7 +2490,7 @@ function AsignacionMensual({ db, session }: any) {
             </div>
           </div>
           <div className="obligationAssignmentList">
-            {data.obligations.map((obligation: any) => {
+            {data.obligations.filter((obligation: any) => obligation.entidad_id === form.entidadId).map((obligation: any) => {
               const annexes = data.annexes.filter((annex: any) => annex.obligation_id === obligation.id);
               return (
                 <section className="obligationAssignmentCard" key={obligation.id}>
@@ -2457,7 +2522,7 @@ function AsignacionMensual({ db, session }: any) {
                       {annexes.map((annex: any) => (
                         <div className="annexAssignmentRow" key={annex.id}>
                           <div>
-                            <b>{annex.numero === 0 ? "Soporte directo de la obligación" : `Anexo ${annex.numero}`}</b>
+                            <b>{reportAnnexLabel(form.entidadId, annex)}</b>
                             <span>{annex.titulo}</span>
                           </div>
                           <label>
@@ -2523,7 +2588,7 @@ function AsignacionMensual({ db, session }: any) {
               </div>
             </div>
           ))}
-          {!data.periods.length && <p className="muted">No hay meses abiertos. Parametrice HGC y abra el primer periodo.</p>}
+          {!data.periods.length && <p className="muted">No hay meses abiertos. Parametrice una entidad y abra el primer periodo.</p>}
         </div>
       </div>
       <div className="card span8">
@@ -3222,7 +3287,7 @@ function Usuarios({ db, save }: any) {
         <h3>Usuarios, claves y activación</h3>
         <table className="table">
           <tbody>
-            {db.usuarios.map((u: Usuario) => (
+            {db.usuarios.filter((u: Usuario) => !/\bdemo\b/i.test(`${u.nombre} ${u.usuario || ""} ${u.correo}`)).map((u: Usuario) => (
               <tr key={u.id}>
                 <td>
                   <b>{u.nombre}</b>

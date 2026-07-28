@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, Printer, Save, Search, Trash2, UserRound } from "lucide-react";
+import { Download, Plus, Printer, Save, Search, Trash2, UserRound } from "lucide-react";
 import { useMemo, useState } from "react";
 import { saveOwnProfile } from "../../lib/agreserge-client";
 
@@ -149,6 +149,8 @@ export function TechnicalProfiles({
     (user: any) => user.rol === "Agremiado",
   );
   const [query, setQuery] = useState("");
+  const [entityFilter, setEntityFilter] = useState("");
+  const [areaFilter, setAreaFilter] = useState("");
   const [feedback, setFeedback] = useState<{
     type: "ok" | "error";
     text: string;
@@ -171,13 +173,41 @@ export function TechnicalProfiles({
     return affiliates
       .filter(
         (user: any) =>
-          !needle ||
-          `${user.nombre} ${user.correo} ${db.perfiles?.[user.id]?.documento || ""}`
-            .toLowerCase()
-            .includes(needle),
+          (!entityFilter || user.entidadId === entityFilter) &&
+          (!areaFilter || user.areaId === areaFilter) &&
+          (
+            !needle ||
+            `${user.nombre} ${user.correo} ${db.perfiles?.[user.id]?.documento || ""}`
+              .toLowerCase()
+              .includes(needle)
+          ),
       )
       .slice(0, 50);
-  }, [affiliates, db.perfiles, query]);
+  }, [affiliates, areaFilter, db.perfiles, entityFilter, query]);
+  const exportCsv = () => {
+    const headers = ["Nombre", "Documento", "Entidad", "Área o servicio", "Tipo", "Estado", "Municipio", "EPS"];
+    const rows = matches.map((user: any) => {
+      const item = db.perfiles?.[user.id] || {};
+      return [
+        user.nombre,
+        item.documento || "",
+        db.entidades.find((entity: any) => entity.id === user.entidadId)?.nombre || "",
+        db.areas.find((area: any) => area.id === user.areaId)?.nombre || user.cargo || item.proceso || "",
+        user.tipo || "",
+        user.activo ? "Activo" : "Inactivo",
+        item.municipio || "",
+        item.eps || "",
+      ];
+    });
+    const csv = [headers, ...rows]
+      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }));
+    link.download = `perfiles-sociodemograficos-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  };
   const updateUser = (patch: any) =>
     setDrafts((current) => ({
       ...current,
@@ -320,6 +350,15 @@ export function TechnicalProfiles({
             placeholder="Nombre o documento"
             onChange={(e) => setQuery(e.target.value)}
           />
+          <select value={entityFilter} onChange={(event) => setEntityFilter(event.target.value)}>
+            <option value="">Todas las entidades</option>
+            {db.entidades.map((entity: any) => <option key={entity.id} value={entity.id}>{entity.nombre}</option>)}
+          </select>
+          <select value={areaFilter} onChange={(event) => setAreaFilter(event.target.value)}>
+            <option value="">Todas las áreas o servicios</option>
+            {db.areas.filter((area: any) => !entityFilter || area.entidadId === entityFilter).map((area: any) => <option key={area.id} value={area.id}>{area.nombre}</option>)}
+          </select>
+          <button className="btn" onClick={exportCsv}><Download size={16} /> Exportar resultados</button>
           <div className="profileDirectory">
             {matches.map((u: any) => (
               <button

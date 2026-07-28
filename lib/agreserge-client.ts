@@ -15,6 +15,9 @@ export async function remoteLogout() {
   await fetch("/api/agreserge-auth/logout", { method: "POST" });
 }
 
+export const changeOwnPassword = (actual: string, nueva: string) =>
+  postJson("/api/agreserge-auth/change-password", { actual, nueva });
+
 export async function saveRemoteDB(db: unknown) {
   const response = await fetch("/api/agreserge-db", {
     method: "PUT",
