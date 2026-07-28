@@ -685,6 +685,27 @@ textarea:focus {
     grid-template-columns: 1fr;
   }
 }
+
+.payrollQuickResults {
+  display: grid;
+  gap: 7px;
+  max-height: 280px;
+  overflow: auto;
+  margin: 8px 0 12px;
+}
+.payrollQuickResults button {
+  border: 1px solid #d5e3f2;
+  background: #f5f9ff;
+  border-radius: 12px;
+  padding: 10px 12px;
+  text-align: left;
+  color: #0c3564;
+  cursor: pointer;
+}
+.payrollQuickResults button:hover { border-color: #0b70c9; background: #eaf4ff; }
+.payrollQuickResults b, .payrollQuickResults span { display: block; }
+.payrollQuickResults span { color: #617891; font-size: 12px; margin-top: 3px; }
+.reportFileList { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .obs {
   background: #ede9fe;
   color: #5b21b6;

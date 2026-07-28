@@ -42,6 +42,7 @@ export function NominaComprobantes({ session }: any) {
   const [error, setError] = useState("");
   const [report, setReport] = useState<any>(null);
   const [reportLoading, setReportLoading] = useState(false);
+  const [adminSearch, setAdminSearch] = useState("");
   const [periods, setPeriods] = useState<any[]>([]);
   const [periodLoading, setPeriodLoading] = useState(false);
   const now = new Date();
@@ -112,13 +113,13 @@ export function NominaComprobantes({ session }: any) {
     }
   };
 
-  const buscar = async () => {
+  const buscar = async (documentOverride?: string) => {
     setLoading(true);
     setError("");
     setPayroll(null);
     try {
       const result = await lookupPayroll(
-        isAffiliate ? "" : documento,
+        isAffiliate ? "" : documentOverride || documento,
         period.mes,
         period.anio,
       );
@@ -129,6 +130,14 @@ export function NominaComprobantes({ session }: any) {
       setLoading(false);
     }
   };
+  const quickResults = useMemo(() => {
+    const needle = adminSearch.trim().toLowerCase();
+    if (!needle || !report?.rows) return [];
+    return report.rows.filter((row: any) =>
+      `${row.documento} ${row.nombre} ${row.area} ${row.cargo} ${row.tab}`
+        .toLowerCase().includes(needle),
+    ).slice(0, 20);
+  }, [adminSearch, report]);
   const imprimir = () => {
     if (!payroll) return;
     const windowRef = window.open("", "_blank", "width=900,height=900");
@@ -407,21 +416,40 @@ export function NominaComprobantes({ session }: any) {
             </div>
           </>
         ) : (
-          <div className="field">
-            <label>Número de documento</label>
-            <input
-              className="input"
-              inputMode="numeric"
-              value={documento}
-              onChange={(e) => setDocumento(e.target.value.replace(/\D/g, ""))}
-              placeholder="Ej. 1112623101"
-            />
-          </div>
+          <>
+            <div className="field">
+              <label>Documento</label>
+              <input className="input" inputMode="numeric" value={documento}
+                onChange={(e) => setDocumento(e.target.value.replace(/\D/g, ""))}
+                placeholder="Ej. 1112623101" />
+            </div>
+            <div className="field">
+              <label>Buscar por nombre, área, proceso u hospital</label>
+              <input className="input" value={adminSearch}
+                onFocus={() => { if (!report && !reportLoading) generarInforme(); }}
+                onChange={(e) => setAdminSearch(e.target.value)}
+                placeholder="Escriba nombre, área u hospital" />
+            </div>
+            {!!quickResults.length && (
+              <div className="payrollQuickResults">
+                {quickResults.map((row: any) => (
+                  <button key={`${row.documento}-${row.tab}`} onClick={() => {
+                    setDocumento(String(row.documento));
+                    setAdminSearch("");
+                    buscar(String(row.documento));
+                  }}>
+                    <b>{row.nombre}</b>
+                    <span>{row.documento} · {row.area || row.cargo} · {row.tab}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
         )}
         <button
           className="btn primary"
           disabled={loading || (isAffiliate ? !periods.length : !documento)}
-          onClick={buscar}
+          onClick={() => buscar()}
         >
           {loading
             ? "Consultando nómina..."

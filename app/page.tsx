@@ -21,6 +21,7 @@ import {
   Save,
   Settings,
   ShieldCheck,
+  Trash2,
   Upload,
   UserCog,
   Users,
@@ -1968,6 +1969,21 @@ function Informes({ db, session }: any) {
       setLoading(false);
     }
   };
+  const uploadMany = async (id: string, files?: FileList | null) => {
+    if (!files?.length) return;
+    setLoading(true);
+    setError("");
+    try {
+      for (const file of Array.from(files)) await uploadReportFile(id, file);
+      await load();
+      alert(`${files.length} archivo${files.length === 1 ? "" : "s"} guardado${files.length === 1 ? "" : "s"} correctamente.`);
+    } catch (e: any) {
+      setError(e.message || "No se pudieron cargar los archivos");
+      alert(e.message || "No se pudieron cargar los archivos");
+    } finally {
+      setLoading(false);
+    }
+  };
   const periodById = (id: string) => data.periods.find((period: any) => period.id === id);
   const leaders = db.usuarios.filter((user: Usuario) =>
     user.activo && user.entidadId === session.entidadId &&
@@ -1977,6 +1993,11 @@ function Informes({ db, session }: any) {
       "Coordinación Asistencial", "Coordinación General", "Coordinador General",
     ].includes(user.rol),
   );
+  const canReview = [
+    "Administrador de Sistemas", "Coordinación AGRESERGE", "Coordinación General",
+    "Coordinador General", "Director Ejecutivo", "Coordinadora Administrativa y Financiera",
+    "Coordinación Administrativa", "Coordinación Asistencial",
+  ].includes(session.rol);
   const createSubreport = async (parentId: string) => {
     const draft = subreportDrafts[parentId] || {};
     if (!draft.titulo || !draft.responsableId) {
@@ -2032,6 +2053,20 @@ function Informes({ db, session }: any) {
                       </a>
                     </div>
                   )}
+                  {!!item.files?.length && (
+                    <div className="reportFileList">
+                      {item.files.map((file: any, index: number) => (
+                        <button className="btn" key={file.id} onClick={() => setPreview({
+                          ...item,
+                          archivo_nombre: file.nombre,
+                          drive_file_url: file.drive_file_url,
+                        })}>
+                          <Eye size={13} /> {index + 1}. {file.nombre}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {item.observacion && <p className="obsBox">{item.observacion}</p>}
                   {item.drive_folder_url && (
                     <a href={item.drive_folder_url} target="_blank" rel="noreferrer" className="link">
                       <FolderKanban size={14} /> Abrir carpeta del anexo
@@ -2039,12 +2074,13 @@ function Informes({ db, session }: any) {
                   )}
                 </div>
                 <label className="reportUpload">
-                  <span>{item.archivo_nombre ? `Reemplazar ${item.archivo_nombre}` : "Cargar informe o soporte"}</span>
+                  <span>{["Aprobado", "Con observación"].includes(item.estado) ? "Soporte revisado y bloqueado" : "Cargar uno o varios archivos"}</span>
                   <input
                     type="file"
+                    multiple
                     accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
-                    disabled={loading}
-                    onChange={(e) => upload(item.id, e.target.files?.[0])}
+                    disabled={loading || ["Aprobado", "Con observación"].includes(item.estado)}
+                    onChange={(e) => uploadMany(item.id, e.target.files)}
                   />
                 </label>
                 {controlsStructure && (
@@ -2052,7 +2088,7 @@ function Informes({ db, session }: any) {
                     <span className="mini">Organizar subinforme</span>
                     <select
                       value={item.responsable_id || ""}
-                      disabled={loading}
+                      disabled={loading || ["Aprobado", "Con observación"].includes(item.estado)}
                       onChange={(e) => updateAssignment(
                         { action: "delegate", id: item.id, responsableId: e.target.value },
                         "Responsable del subinforme actualizado.",
@@ -2069,7 +2105,7 @@ function Informes({ db, session }: any) {
                         type="number"
                         min="1"
                         defaultValue={item.orden}
-                        disabled={loading}
+                        disabled={loading || ["Aprobado", "Con observación"].includes(item.estado)}
                         onBlur={(e) => updateAssignment(
                           { action: "reorder", id: item.id, orden: Number(e.target.value) },
                           "Orden del subinforme guardado.",
@@ -2078,7 +2114,45 @@ function Informes({ db, session }: any) {
                     </label>
                   </div>
                 )}
-                {!item.parent_id && item.responsable_id === session.id && (
+                {item.parent_id && (controlsStructure || item.responsable_id === session.id) && (
+                  <button
+                    className="btn danger"
+                    disabled={loading || ["Aprobado", "Con observación"].includes(item.estado)}
+                    onClick={() => {
+                      if (confirm("¿Eliminar este subinforme y sus archivos del portal?"))
+                        updateAssignment({ action: "delete-subreport", id: item.id }, "Subinforme eliminado.");
+                    }}
+                  >
+                    <Trash2 size={14} /> Eliminar subinforme
+                  </button>
+                )}
+                {canReview && (
+                  <div className="assignmentActions">
+                    <input
+                      className="input"
+                      placeholder="Observación de coordinación"
+                      defaultValue={item.observacion || ""}
+                      id={`review-${item.id}`}
+                    />
+                    <button className="btn primary" disabled={loading} onClick={() => updateAssignment({
+                      action: "review-submission",
+                      id: item.id,
+                      estado: "Aprobado",
+                      observacion: (document.getElementById(`review-${item.id}`) as HTMLInputElement)?.value || "",
+                    }, "Visto bueno registrado. El soporte quedó bloqueado hasta el próximo mes.")}>
+                      Visto bueno
+                    </button>
+                    <button className="btn" disabled={loading} onClick={() => updateAssignment({
+                      action: "review-submission",
+                      id: item.id,
+                      estado: "Con observación",
+                      observacion: (document.getElementById(`review-${item.id}`) as HTMLInputElement)?.value || "",
+                    }, "Observación registrada.")}>
+                      Guardar observación
+                    </button>
+                  </div>
+                )}
+                {!item.parent_id && item.responsable_id === session.id && !["Aprobado", "Con observación"].includes(item.estado) && (
                   <div className="subreportCreator">
                     <b>Agregar un subinforme a este anexo</b>
                     <input

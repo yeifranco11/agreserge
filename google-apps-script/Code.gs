@@ -152,12 +152,20 @@ function consolidate_(input) {
         ? 'SOPORTE DIRECTO DE LA OBLIGACIÓN · ' + (item.titulo || '')
         : 'ANEXO ' + (item.anexo || 'S/A') + ' · ' + (item.titulo || '')
     ).setHeading(DocumentApp.ParagraphHeading.HEADING2);
-    const link = body.appendParagraph(item.url || 'Sin archivo cargado');
-    if (item.url) link.setLinkUrl(item.url);
+    const principalFiles = item.urls && item.urls.length ? item.urls : (item.url ? [{ nombre: 'Archivo principal', url: item.url }] : []);
+    if (!principalFiles.length) body.appendParagraph('Sin archivo cargado');
+    principalFiles.forEach(function(support, index) {
+      const link = body.appendParagraph((index + 1) + '. ' + (support.nombre || support.url));
+      if (support.url) link.setLinkUrl(support.url);
+    });
     (item.subitems || []).sort(function(a,b){ return Number(a.orden)-Number(b.orden); }).forEach(function(sub) {
       body.appendParagraph(sub.orden + '. ' + sub.titulo + ' · ' + (sub.responsableNombre || '')).setHeading(DocumentApp.ParagraphHeading.HEADING3);
-      const subLink = body.appendParagraph(sub.url || 'Pendiente');
-      if (sub.url) subLink.setLinkUrl(sub.url);
+      const subFiles = sub.urls && sub.urls.length ? sub.urls : (sub.url ? [{ nombre: 'Archivo', url: sub.url }] : []);
+      if (!subFiles.length) body.appendParagraph('Pendiente');
+      subFiles.forEach(function(support, index) {
+        const subLink = body.appendParagraph((index + 1) + '. ' + (support.nombre || support.url));
+        if (support.url) subLink.setLinkUrl(support.url);
+      });
     });
   });
   doc.saveAndClose();
@@ -180,13 +188,21 @@ function consolidate_(input) {
     annexBody.appendParagraph(item.obligacionTitulo || '');
     annexBody.appendParagraph(annexLabel + ' · ' + (item.titulo || '')).setHeading(DocumentApp.ParagraphHeading.HEADING2);
     annexBody.appendParagraph('Responsable: ' + (item.responsableNombre || 'Sin asignar'));
-    const principal = annexBody.appendParagraph(item.url || 'Sin archivo principal cargado');
-    if (item.url) principal.setLinkUrl(item.url);
+    const annexFiles = item.urls && item.urls.length ? item.urls : (item.url ? [{ nombre: 'Archivo principal', url: item.url }] : []);
+    if (!annexFiles.length) annexBody.appendParagraph('Sin archivo principal cargado');
+    annexFiles.forEach(function(support, index) {
+      const principal = annexBody.appendParagraph((index + 1) + '. ' + (support.nombre || support.url));
+      if (support.url) principal.setLinkUrl(support.url);
+    });
     (item.subitems || []).sort(function(a,b){ return Number(a.orden)-Number(b.orden); }).forEach(function(sub, index) {
       annexBody.appendParagraph((index + 1) + '. ' + sub.titulo).setHeading(DocumentApp.ParagraphHeading.HEADING3);
       annexBody.appendParagraph('Responsable: ' + (sub.responsableNombre || 'Sin asignar'));
-      const support = annexBody.appendParagraph(sub.url || 'Pendiente de cargue');
-      if (sub.url) support.setLinkUrl(sub.url);
+      const subFiles = sub.urls && sub.urls.length ? sub.urls : (sub.url ? [{ nombre: 'Archivo', url: sub.url }] : []);
+      if (!subFiles.length) annexBody.appendParagraph('Pendiente de cargue');
+      subFiles.forEach(function(fileData, fileIndex) {
+        const support = annexBody.appendParagraph((fileIndex + 1) + '. ' + (fileData.nombre || fileData.url));
+        if (fileData.url) support.setLinkUrl(fileData.url);
+      });
     });
     annexDoc.saveAndClose();
     const annexFile = DriveApp.getFileById(annexDoc.getId());
