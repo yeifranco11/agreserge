@@ -22,7 +22,18 @@ export async function POST(request: Request) {
     const id = String(input.id || "");
     const action = String(input.action || "");
     const fileName = String(input.fileName || "").trim();
-    const fileType = String(input.fileType || "application/octet-stream");
+    const extension = fileName.split(".").pop()?.toLowerCase();
+    const inferredTypes: Record<string, string> = {
+      pdf: "application/pdf", doc: "application/msword",
+      docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      xls: "application/vnd.ms-excel",
+      xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png",
+    };
+    const providedType = String(input.fileType || "");
+    const fileType = providedType && providedType !== "application/octet-stream"
+      ? providedType
+      : inferredTypes[extension || ""] || "application/octet-stream";
     const fileSize = Number(input.fileSize || 0);
     if (!id || !fileName || !["prepare", "finalize"].includes(action))
       return NextResponse.json({ error: "Solicitud de carga inválida" }, { status: 400 });

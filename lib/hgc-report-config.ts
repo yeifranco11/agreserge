@@ -36,8 +36,7 @@ export const HGC_OBLIGATIONS: HgcObligation[] = [
   { number: 7, title: "Garantizar la capacitación continua del personal agremiado.", annexes: [{ number: 15, title: "Plan de capacitación e informe mensual de ejecución" }] },
   { number: 8, title: "Aplicar los formatos, guías y protocolos institucionales de la E.S.E.", annexes: [] },
   { number: 9, title: "Organizar las actividades de los agremiados y garantizar las pólizas de responsabilidad exigidas.", annexes: [
-    { number: 16, title: "Póliza de responsabilidad civil extracontractual" },
-    { number: 17, title: "Base de datos de pólizas de responsabilidad civil de agremiados" },
+    { number: 16, title: "Anexo 16 y 17 · Póliza de responsabilidad civil extracontractual y base de datos de pólizas vigentes (un solo archivo)" },
   ]},
   { number: 10, title: "Dar trámite oportuno a las glosas trasladadas por el Hospital.", annexes: [] },
   { number: 11, title: "Entregar el manual de actividades de afiliados técnicos y profesionales.", annexes: [{ number: 18, title: "Manual de actividades (entrega única)" }] },
