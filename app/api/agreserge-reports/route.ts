@@ -193,18 +193,30 @@ export async function GET(request: Request) {
         ? submissions.or(`responsable_id.eq.${actor.id},delegado_por_id.eq.${actor.id}`)
         : submissions.eq("responsable_id", actor.id);
     }
-    const [periods, obligations, annexes, submissionRows] = await Promise.all([
+    const [periods, obligations, annexes, submissionRows, reportFiles] = await Promise.all([
       supabase.from("agreserge_report_periods").select("*, entity:agreserge_entities(*)").order("created_at", { ascending: false }),
       supabase.from("agreserge_report_obligations").select("*").order("orden"),
       supabase.from("agreserge_report_annexes").select("*").order("orden"),
       submissions,
+      supabase.from("agreserge_audit").select("id,usuario_id,metadata,created_at")
+        .eq("evento", "Archivo múltiple de informe").order("created_at"),
     ]);
-    for (const result of [periods, obligations, annexes, submissionRows]) if (result.error) throw result.error;
+    for (const result of [periods, obligations, annexes, submissionRows, reportFiles]) if (result.error) throw result.error;
+    const filesBySubmission = new Map<string, any[]>();
+    for (const audit of reportFiles.data || []) {
+      const file = { id: audit.id, uploaded_by: audit.usuario_id, created_at: audit.created_at, ...(audit.metadata || {}) };
+      const list = filesBySubmission.get(file.submission_id) || [];
+      list.push(file);
+      filesBySubmission.set(file.submission_id, list);
+    }
     return NextResponse.json({
       periods: periods.data || [],
       obligations: obligations.data || [],
       annexes: annexes.data || [],
-      submissions: submissionRows.data || [],
+      submissions: (submissionRows.data || []).map((submission: any) => ({
+        ...submission,
+        files: filesBySubmission.get(submission.id) || [],
+      })),
     });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || "No se pudieron cargar los informes" }, { status: error.message === "Sesión requerida" ? 401 : 500 });
@@ -577,17 +589,57 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, submission: inserted.data });
     }
 
+    if (input.action === "delete-subreport") {
+      const current = await supabase.from("agreserge_report_submissions")
+        .select("*").eq("id", input.id).not("parent_id", "is", null).single();
+      if (current.error) throw current.error;
+      const canDelete = canManageReports ||
+        current.data.delegado_por_id === actor.id ||
+        current.data.responsable_id === actor.id;
+      if (!canDelete)
+        return NextResponse.json({ error: "No tiene permiso para eliminar este subinforme" }, { status: 403 });
+      if (["Aprobado", "Con observación"].includes(current.data.estado))
+        return NextResponse.json({ error: "El subinforme revisado está bloqueado" }, { status: 423 });
+      const deleted = await supabase.from("agreserge_report_submissions")
+        .delete().eq("id", input.id).select("id").single();
+      if (deleted.error) throw deleted.error;
+      return NextResponse.json({ ok: true, deletedId: deleted.data.id });
+    }
+
+    if (input.action === "review-submission") {
+      if (!canManageReports)
+        return NextResponse.json({ error: "Solo coordinación o representación legal puede revisar soportes" }, { status: 403 });
+      if (!["Aprobado", "Con observación"].includes(input.estado))
+        return NextResponse.json({ error: "Estado de revisión inválido" }, { status: 400 });
+      const reviewed = await supabase.from("agreserge_report_submissions").update({
+        estado: input.estado,
+        observacion: String(input.observacion || "").trim() || null,
+        updated_at: new Date().toISOString(),
+      }).eq("id", input.id).select("id,estado,observacion").single();
+      if (reviewed.error) throw reviewed.error;
+      return NextResponse.json({ ok: true, submission: reviewed.data });
+    }
+
     if (input.action === "close-period") {
       const periodResult = await supabase.from("agreserge_report_periods").select("*, entity:agreserge_entities(*)").eq("id", input.periodId).single();
       if (periodResult.error) throw periodResult.error;
       const submissions = await supabase.from("agreserge_report_submissions").select("*, obligation:agreserge_report_obligations(*), annex:agreserge_report_annexes(*)").eq("period_id", input.periodId).order("orden");
       if (submissions.error) throw submissions.error;
+      const reportFileRows = await supabase.from("agreserge_audit")
+        .select("metadata").eq("evento", "Archivo múltiple de informe");
+      if (reportFileRows.error) throw reportFileRows.error;
+      const filesFor = (submissionId: string) => (reportFileRows.data || [])
+        .map((row: any) => row.metadata || {})
+        .filter((file: any) => file.submission_id === submissionId);
       const items = (submissions.data || []).filter((item: any) => !item.parent_id).map((item: any) => ({
         obligacion: item.obligation.numero, obligacionTitulo: item.obligation.titulo,
         anexo: item.annex?.numero ?? null, titulo: item.titulo, orden: item.orden,
-        url: item.drive_file_url || item.archivo_path, responsableNombre: db.usuarios.find((u: any) => u.id === item.responsable_id)?.nombre,
+        url: item.drive_file_url || item.archivo_path,
+        urls: filesFor(item.id).map((file: any) => ({ nombre: file.nombre, url: file.drive_file_url })),
+        responsableNombre: db.usuarios.find((u: any) => u.id === item.responsable_id)?.nombre,
         subitems: (submissions.data || []).filter((sub: any) => sub.parent_id === item.id).map((sub: any) => ({
           titulo: sub.titulo, orden: sub.orden, url: sub.drive_file_url,
+          urls: filesFor(sub.id).map((file: any) => ({ nombre: file.nombre, url: file.drive_file_url })),
           responsableNombre: db.usuarios.find((u: any) => u.id === sub.responsable_id)?.nombre,
         })),
       }));

@@ -218,7 +218,9 @@ export async function loadDB() {
   return {
     usuarios: ((users.data ?? []) as any[]).map(userFromRow),
     perfiles: Object.fromEntries(((profiles.data ?? []) as any[]).map((row: any) => [row.user_id, profileFromRow(row)])),
-    entidades: ((entities.data ?? []) as any[]).map((row: any) => ({
+    entidades: ((entities.data ?? []) as any[])
+      .filter((row: any) => !/hospital\s+san\s+bernab[eé]/i.test(row.nombre || ''))
+      .map((row: any) => ({
       id: row.id,
       nombre: row.nombre,
       nit: row.nit ?? '',
@@ -226,7 +228,7 @@ export async function loadDB() {
       direccion: row.direccion ?? '',
       fechaContrato: row.fecha_contrato ?? undefined,
       contrato: row.contrato_path ? { nombre: 'Contrato', tipo: 'application/octet-stream', tamano: 0, dataUrl: row.contrato_path, fecha: row.fecha_contrato ?? '' } : undefined,
-    })),
+      })),
     areas: ((areas.data ?? []) as any[]).map((row: any) => ({ id: row.id, nombre: row.nombre, entidadId: row.entidad_id, tipo: row.tipo, liderId: row.lider_id ?? undefined })),
     documentos: docs,
     permisos: {

@@ -30,6 +30,7 @@ const required = [
   "sexo",
   "estadoCivil",
   "eps",
+  "tipoSangre",
 ];
 const personal = [
   ["documento", "Número de documento", "text"],
@@ -47,6 +48,26 @@ const personal = [
     "select:Soltero(a)|Casado(a)|Unión libre|Separado(a)|Viudo(a)",
   ],
   ["eps", "EPS", "text"],
+  [
+    "tipoSangre",
+    "Tipo de sangre",
+    "select:A+|A-|B+|B-|AB+|AB-|O+|O-|No conoce",
+  ],
+  [
+    "identidadGenero",
+    "Identidad de género",
+    "select:Hombre|Mujer|Hombre transgénero|Mujer transgénero|Persona no binaria|Género fluido|Agénero|Prefiere no responder|Otro",
+  ],
+  ["identidadGeneroOtra", "Otra identidad de género", "text"],
+  [
+    "permisoTrabajo",
+    "¿Cuenta con permiso de trabajo?",
+    "select:Sí|No|No aplica",
+  ],
+  ["estadoVida", "Estado de vida", "select:Vivo|Fallecido"],
+  ["fechaFallecimiento", "Fecha de fallecimiento", "date"],
+  ["causaFallecimiento", "Causa del fallecimiento", "text"],
+  ["observacionesFallecimiento", "Observaciones", "text"],
   ["regimen", "Régimen", "select:Contributivo|Subsidiado"],
   [
     "nivelEscolaridad",
@@ -103,6 +124,19 @@ const home = [
   ["serviciosBasicos", "Servicios básicos disponibles", "text"],
   ["habitaciones", "Número de habitaciones", "number"],
   ["mobiliario", "Mobiliario de la vivienda", "text"],
+  [
+    "estratoVivienda",
+    "Estrato socioeconómico de la vivienda",
+    "select:1|2|3|4|5|6|No aplica",
+  ],
+  ["presentaDiscapacidad", "¿Presenta alguna discapacidad?", "select:Sí|No"],
+  [
+    "personasDiscapacidadHogar",
+    "Personas con discapacidad en el hogar",
+    "number",
+  ],
+  ["tiposDiscapacidad", "Tipos de discapacidad", "text"],
+  ["discapacidadOtra", "Otra discapacidad", "text"],
 ] as const;
 const health = [
   ["usoTiempoLibre", "Uso del tiempo libre", "text"],
@@ -117,8 +151,10 @@ const health = [
   [
     "practicaDeporte",
     "Práctica de deporte",
-    "select:No|Sí - ocasional|Sí - mensual|Sí - quincenal|Sí - semanal",
+    "select:Sí|No",
   ],
+  ["deportesPractica", "Deportes que practica", "text"],
+  ["deporteOtro", "Otro deporte", "text"],
   ["peso", "Peso (kg)", "number"],
   ["tallaCm", "Talla (cm)", "number"],
   [
@@ -185,7 +221,7 @@ export function TechnicalProfiles({
       .slice(0, 50);
   }, [affiliates, areaFilter, db.perfiles, entityFilter, query]);
   const exportCsv = () => {
-    const headers = ["Nombre", "Documento", "Entidad", "Área o servicio", "Tipo", "Estado", "Municipio", "EPS"];
+    const headers = ["Nombre", "Documento", "Entidad", "Área o servicio", "Tipo", "Estado", "Municipio", "EPS", "Tipo de sangre", "Identidad de género", "Estrato", "Discapacidad", "Permiso de trabajo", "Estado de vida"];
     const rows = matches.map((user: any) => {
       const item = db.perfiles?.[user.id] || {};
       return [
@@ -197,6 +233,12 @@ export function TechnicalProfiles({
         user.activo ? "Activo" : "Inactivo",
         item.municipio || "",
         item.eps || "",
+        item.datosAdicionales?.tipoSangre || item.tipoSangre || "",
+        item.datosAdicionales?.identidadGenero || "",
+        item.datosAdicionales?.estratoVivienda || "",
+        item.datosAdicionales?.presentaDiscapacidad || "",
+        item.datosAdicionales?.permisoTrabajo || "",
+        item.datosAdicionales?.estadoVida || "Vivo",
       ];
     });
     const csv = [headers, ...rows]
@@ -262,6 +304,18 @@ export function TechnicalProfiles({
         type: "error",
         text: "Debes aceptar el consentimiento de tratamiento de datos.",
       });
+    if (val("practicaDeporte") === "Sí" && !String(val("deportesPractica")).trim())
+      return setFeedback({ type: "error", text: "Seleccione al menos un deporte." });
+    if (String(val("deportesPractica")).includes("Otro") && !String(val("deporteOtro")).trim())
+      return setFeedback({ type: "error", text: "Especifique cuál otro deporte practica." });
+    if (val("presentaDiscapacidad") === "Sí" && !String(val("personasDiscapacidadHogar")).trim())
+      return setFeedback({ type: "error", text: "Indique cuántas personas con discapacidad hay en el hogar." });
+    if (String(val("tiposDiscapacidad")).includes("Otra") && !String(val("discapacidadOtra")).trim())
+      return setFeedback({ type: "error", text: "Especifique la otra discapacidad." });
+    if (val("identidadGenero") === "Otro" && !String(val("identidadGeneroOtra")).trim())
+      return setFeedback({ type: "error", text: "Especifique la identidad de género." });
+    if (val("estadoVida") === "Fallecido" && (!val("fechaFallecimiento") || !String(val("causaFallecimiento")).trim()))
+      return setFeedback({ type: "error", text: "Registre la fecha y causa del fallecimiento." });
     const nextUser = profile.__user || target;
     const clean = {
       ...profile,
@@ -486,6 +540,12 @@ export function TechnicalProfiles({
           />
           <L>EPS</L>
           <I value={val("eps")} set={(v) => setVal("eps", v)} />
+          <L>Tipo de sangre *</L>
+          <Select
+            value={val("tipoSangre")}
+            set={(v) => setVal("tipoSangre", v)}
+            options={["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", "No conoce"]}
+          />
           <L>Régimen</L>
           <Choices
             wide
@@ -528,6 +588,38 @@ export function TechnicalProfiles({
               "Posgrado",
             ]}
           />
+        </div>
+        <Band>Identidad, permiso de trabajo y estado de vida</Band>
+        <div className="healthGrid">
+          <Cell title="Identidad de género">
+            <Select
+              value={val("identidadGenero")}
+              set={(v) => setVal("identidadGenero", v)}
+              options={["Hombre", "Mujer", "Hombre transgénero", "Mujer transgénero", "Persona no binaria", "Género fluido", "Agénero", "Prefiere no responder", "Otro"]}
+            />
+            {val("identidadGenero") === "Otro" && (
+              <I value={val("identidadGeneroOtra")} set={(v) => setVal("identidadGeneroOtra", v)} placeholder="Especifique *" />
+            )}
+          </Cell>
+          <Cell title="¿Cuenta con permiso de trabajo?">
+            <Choices value={val("permisoTrabajo")} set={(v) => setVal("permisoTrabajo", v)} options={["Sí", "No", "No aplica"]} />
+          </Cell>
+          <Cell title="Estado de vida">
+            <Choices value={val("estadoVida") || "Vivo"} set={(v) => setVal("estadoVida", v)} options={["Vivo", "Fallecido"]} />
+          </Cell>
+          {val("estadoVida") === "Fallecido" && (
+            <>
+              <Cell title="Fecha de fallecimiento">
+                <I type="date" value={val("fechaFallecimiento")} set={(v) => setVal("fechaFallecimiento", v)} />
+              </Cell>
+              <Cell title="Causa del fallecimiento">
+                <I value={val("causaFallecimiento")} set={(v) => setVal("causaFallecimiento", v)} />
+              </Cell>
+              <Cell title="Observaciones">
+                <I value={val("observacionesFallecimiento")} set={(v) => setVal("observacionesFallecimiento", v)} />
+              </Cell>
+            </>
+          )}
         </div>
         <Band>Composición familiar</Band>
         <div className="familyTable">
@@ -715,8 +807,44 @@ export function TechnicalProfiles({
               ]}
             />
           </Cell>
+          <Cell title="Estrato socioeconómico de la vivienda">
+            <Choices
+              value={val("estratoVivienda")}
+              set={(v) => setVal("estratoVivienda", v)}
+              options={["1", "2", "3", "4", "5", "6", "No aplica"]}
+            />
+          </Cell>
+          <Cell title="¿Presenta alguna discapacidad?">
+            <Choices
+              value={val("presentaDiscapacidad")}
+              set={(v) => setVal("presentaDiscapacidad", v)}
+              options={["Sí", "No"]}
+            />
+          </Cell>
+          {val("presentaDiscapacidad") === "Sí" && (
+            <>
+              <Cell title="Cantidad de personas con discapacidad en el hogar">
+                <I
+                  type="number"
+                  value={val("personasDiscapacidadHogar")}
+                  set={(v) => setVal("personasDiscapacidadHogar", v)}
+                  placeholder="Cantidad *"
+                />
+              </Cell>
+              <Cell title="Tipo de discapacidad" full>
+                <Multi
+                  value={val("tiposDiscapacidad")}
+                  set={(v) => setVal("tiposDiscapacidad", v)}
+                  options={["Física", "Visual", "Auditiva", "Intelectual", "Psicosocial", "Múltiple", "Otra"]}
+                />
+                {String(val("tiposDiscapacidad")).includes("Otra") && (
+                  <I value={val("discapacidadOtra")} set={(v) => setVal("discapacidadOtra", v)} placeholder="Especifique otra discapacidad *" />
+                )}
+              </Cell>
+            </>
+          )}
         </div>
-        <Band>Salud y estilo de vida</Band>
+        <Band>Salud y estilos de vida</Band>
         <div className="healthGrid">
           <Cell title="Uso de tiempo libre">
             <Multi
@@ -781,19 +909,24 @@ export function TechnicalProfiles({
               ]}
             />
           </Cell>
-          <Cell title="Practica algún deporte">
+          <Cell title="¿Practica algún deporte?">
             <Choices
               value={val("practicaDeporte")}
               set={(v) => setVal("practicaDeporte", v)}
-              options={[
-                "Sí",
-                "No",
-                "Semanal",
-                "Quincenal",
-                "Mensual",
-                "Ocasional",
-              ]}
+              options={["Sí", "No"]}
             />
+            {val("practicaDeporte") === "Sí" && (
+              <>
+                <Multi
+                  value={val("deportesPractica")}
+                  set={(v) => setVal("deportesPractica", v)}
+                  options={["Fútbol", "Ciclismo", "Caminata", "Trote", "Natación", "Gimnasio", "Otro"]}
+                />
+                {String(val("deportesPractica")).includes("Otro") && (
+                  <I value={val("deporteOtro")} set={(v) => setVal("deporteOtro", v)} placeholder="Especifique el deporte *" />
+                )}
+              </>
+            )}
           </Cell>
           <Cell title="Peso">
             <I

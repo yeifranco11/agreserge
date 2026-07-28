@@ -50,6 +50,11 @@ export async function POST(request: Request) {
     const supabase = requireSupabaseAdmin() as any;
     const submission = await supabase.from("agreserge_report_submissions").select("*").eq("id", id).single();
     if (submission.error) throw submission.error;
+    if (["Aprobado", "Con observación"].includes(submission.data.estado))
+      return NextResponse.json(
+        { error: "Este soporte ya fue revisado y quedó bloqueado hasta el próximo mes." },
+        { status: 423 },
+      );
     const parent = submission.data.parent_id
       ? await supabase.from("agreserge_report_submissions").select("*").eq("id", submission.data.parent_id).maybeSingle()
       : { data: null };
@@ -84,7 +89,20 @@ export async function POST(request: Request) {
       updated_at: new Date().toISOString(),
     }).eq("id", id);
     if (update.error) throw update.error;
-    return NextResponse.json({ ok: true, url: drive.url });
+    const fileRow = await supabase.from("agreserge_audit").insert({
+      usuario_id: actor.id,
+      evento: "Archivo múltiple de informe",
+      metadata: {
+        submission_id: id,
+        storage_path: path,
+        nombre: fileName,
+        mime_type: fileType,
+        drive_file_id: drive.id,
+        drive_file_url: drive.url,
+      },
+    }).select("*").single();
+    if (fileRow.error) throw fileRow.error;
+    return NextResponse.json({ ok: true, url: drive.url, file: fileRow.data.metadata });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || "No se pudo cargar el informe" }, { status: 500 });
   }
