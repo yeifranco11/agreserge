@@ -2485,6 +2485,15 @@ function AsignacionMensual({ db, session }: any) {
     if (payload?.pdfFolderUrl) window.open(payload.pdfFolderUrl, "_blank", "noopener,noreferrer");
     else if (payload?.url) window.open(payload.url, "_blank", "noopener,noreferrer");
   };
+  const cancel = async (period: any) => {
+    if (!confirm(
+      `¿Cancelar la apertura de ${period.mes} ${period.anio} para ${period.entity?.nombre || "esta entidad"}?\n\nSe eliminarán únicamente este periodo abierto y sus asignaciones. Los meses cerrados, usuarios y parametrización se conservarán.`,
+    )) return;
+    await action(
+      { action: "cancel-period", periodId: period.id },
+      "Apertura mensual cancelada correctamente.",
+    );
+  };
   const syncPeriod = async (periodId: string) => {
     const payload = await action(
       { action: "sync-period", periodId },
@@ -2658,6 +2667,11 @@ function AsignacionMensual({ db, session }: any) {
                   </button>
                 )}
                 {period.estado !== "Cerrado" && isManager && <button className="btn primary" onClick={() => close(period.id)}>Cerrar y consolidar</button>}
+                {period.estado !== "Cerrado" && isManager && (
+                  <button className="btn danger" disabled={loading} onClick={() => cancel(period)}>
+                    Cancelar apertura
+                  </button>
+                )}
                 {period.consolidated_doc_url && <a className="btn primary" href={period.consolidated_doc_url} target="_blank">Informe editable</a>}
               </div>
             </div>
@@ -3254,6 +3268,29 @@ function Usuarios({ db, save }: any) {
     tipo: "Asistencial",
     activo: true,
   });
+  const [accessLoading, setAccessLoading] = useState(false);
+  const enableAffiliateAccess = async () => {
+    if (!confirm(
+      "¿Asignar a todos los afiliados partícipes el usuario igual a su cédula, activar sus cuentas y establecer la clave inicial 1234?",
+    )) return;
+    setAccessLoading(true);
+    try {
+      const response = await fetch("/api/agreserge-admin/affiliate-access", { method: "POST" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error);
+      const details = [
+        `${payload.updated} cuentas habilitadas`,
+        payload.skippedWithoutDocument ? `${payload.skippedWithoutDocument} sin cédula fueron omitidas` : "",
+        payload.conflicts?.length ? `${payload.conflicts.length} conflictos requieren revisión` : "",
+      ].filter(Boolean).join(". ");
+      alert(`${details}. Usuario: cédula. Clave inicial: 1234.`);
+      location.reload();
+    } catch (error: any) {
+      alert(error.message || "No se pudieron habilitar los accesos.");
+    } finally {
+      setAccessLoading(false);
+    }
+  };
   const add = () => {
     if (!p.nombre || !p.usuario || !p.correo)
       return alert("Digite nombre, usuario y correo");
@@ -3359,6 +3396,13 @@ function Usuarios({ db, save }: any) {
       </div>
       <div className="card span8">
         <h3>Usuarios, claves y activación</h3>
+        <div className="row">
+          <button className="btn primary" disabled={accessLoading} onClick={enableAffiliateAccess}>
+            <KeyRound size={14} />
+            {accessLoading ? "Habilitando accesos…" : "Habilitar acceso a todos los afiliados"}
+          </button>
+          <span className="mini">Usuario: número de cédula · Clave inicial: 1234</span>
+        </div>
         <table className="table">
           <tbody>
             {db.usuarios.filter((u: Usuario) => !/\bdemo\b/i.test(`${u.nombre} ${u.usuario || ""} ${u.correo}`)).map((u: Usuario) => (
