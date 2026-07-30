@@ -235,7 +235,7 @@ export async function POST(request: Request) {
     const canManageReports = canAdmin(actor) || reportManagers.includes(actor.rol);
     const managerActions = new Set([
       "bootstrap-hgc", "bootstrap-entity", "reset-periods", "open-period", "close-period",
-      "assign-annex", "reorder-obligation", "reorder-annex", "sync-period",
+      "assign-annex", "reorder-obligation", "reorder-annex", "sync-period", "cancel-period",
     ]);
     if (managerActions.has(input.action) && !canManageReports) {
       return NextResponse.json({ error: "Perfil no autorizado para administrar informes" }, { status: 403 });
@@ -523,6 +523,49 @@ export async function POST(request: Request) {
         await supabase.from("agreserge_report_periods").delete().eq("id", periodId);
         throw error;
       }
+    }
+
+    if (input.action === "cancel-period") {
+      const period = await supabase.from("agreserge_report_periods")
+        .select("*, entity:agreserge_entities(nombre)")
+        .eq("id", input.periodId)
+        .single();
+      if (period.error) throw period.error;
+      if (period.data.estado === "Cerrado") {
+        return NextResponse.json(
+          { error: "Un periodo cerrado no se puede cancelar" },
+          { status: 409 },
+        );
+      }
+
+      const deleted = await supabase.from("agreserge_report_periods")
+        .delete()
+        .eq("id", input.periodId)
+        .neq("estado", "Cerrado")
+        .select("id")
+        .single();
+      if (deleted.error) throw deleted.error;
+
+      const audit = await supabase.from("agreserge_audit").insert({
+        usuario_id: actor.id,
+        evento: "Apertura mensual cancelada",
+        metadata: {
+          period_id: period.data.id,
+          entidad_id: period.data.entidad_id,
+          entidad: period.data.entity?.nombre,
+          mes: period.data.mes,
+          anio: period.data.anio,
+          drive_folder_id: period.data.drive_folder_id,
+          drive_folder_url: period.data.drive_folder_url,
+        },
+      });
+      if (audit.error) throw audit.error;
+
+      return NextResponse.json({
+        ok: true,
+        periodId: deleted.data.id,
+        message: "La apertura mensual y sus asignaciones fueron canceladas.",
+      });
     }
 
     if (input.action === "delegate" || input.action === "reorder") {
