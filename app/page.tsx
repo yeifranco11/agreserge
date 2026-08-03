@@ -1917,6 +1917,7 @@ const drivePreviewUrl = (url = "") =>
 function Informes({ db, session }: any) {
   const [data, setData] = useState<any>({ periods: [], submissions: [] });
   const [preview, setPreview] = useState<any>(null);
+  const [hospitalFilter, setHospitalFilter] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [subreportDrafts, setSubreportDrafts] = useState<Record<string, any>>({});
@@ -1934,7 +1935,16 @@ function Informes({ db, session }: any) {
       setLoading(false);
     }
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    const refreshOnFocus = () => load();
+    const refreshTimer = window.setInterval(load, 30_000);
+    window.addEventListener("focus", refreshOnFocus);
+    return () => {
+      window.clearInterval(refreshTimer);
+      window.removeEventListener("focus", refreshOnFocus);
+    };
+  }, []);
   const updateAssignment = async (body: any, successMessage: string) => {
     setLoading(true);
     setError("");
@@ -1985,6 +1995,18 @@ function Informes({ db, session }: any) {
     }
   };
   const periodById = (id: string) => data.periods.find((period: any) => period.id === id);
+  const activeHospitals = Array.from(
+    new Map(
+      data.periods
+        .filter((period: any) => period.estado !== "Cerrado" && period.entity)
+        .map((period: any) => [period.entidad_id, period.entity]),
+    ).entries(),
+  ) as Array<[string, any]>;
+  const visibleSubmissions = data.submissions.filter((item: any) => {
+    const period = periodById(item.period_id);
+    return period?.estado !== "Cerrado" &&
+      (!hospitalFilter || period?.entidad_id === hospitalFilter);
+  });
   const leaders = db.usuarios.filter((user: Usuario) =>
     user.activo && user.entidadId === session.entidadId &&
     [
@@ -2025,11 +2047,23 @@ function Informes({ db, session }: any) {
             Aquí aparecen exclusivamente los anexos y subinformes asignados a {session.nombre}.
           </p>
         </div>
-        <span className={`pill ${error ? "bad" : "ok"}`}>{error || (loading ? "Sincronizando…" : `${data.submissions.length} asignaciones`)}</span>
+        <span className={`pill ${error ? "bad" : "ok"}`}>{error || (loading ? "Sincronizando…" : `${visibleSubmissions.length} asignaciones activas`)}</span>
       </div>
       <div className="card span12">
+        <div className="sectionTitleRow reportFilters">
+          <div>
+            <span className="badge">FILTRAR POR HOSPITAL</span>
+            <p className="muted">Solo se muestran obligaciones de meses actualmente abiertos.</p>
+          </div>
+          <select value={hospitalFilter} onChange={(event) => setHospitalFilter(event.target.value)}>
+            <option value="">Todos los hospitales con mes abierto</option>
+            {activeHospitals.map(([entityId, entity]) => (
+              <option key={entityId} value={entityId}>{entity.nombre}</option>
+            ))}
+          </select>
+        </div>
         <div className="assignmentStack">
-          {data.submissions.map((item: any) => {
+          {visibleSubmissions.map((item: any) => {
             const period = periodById(item.period_id);
             const controlsStructure = item.delegado_por_id === session.id;
             return (
@@ -2042,7 +2076,7 @@ function Informes({ db, session }: any) {
                       ? "Soporte directo de la obligación"
                       : `Anexo ${item.annex?.numero || "—"}`} · {item.titulo}</b>
                   <span>
-                    Obligación {item.obligation?.numero || "—"} · {period?.mes || "Periodo"} {period?.anio || ""}
+                    {period?.entity?.nombre || "Hospital"} · Obligación {item.obligation?.numero || "—"} · {period?.mes || "Periodo"} {period?.anio || ""}
                     {" · "}{item.estado}
                   </span>
                   {item.drive_file_url && (
@@ -2195,11 +2229,11 @@ function Informes({ db, session }: any) {
               </article>
             );
           })}
-          {!loading && !data.submissions.length && (
+          {!loading && !visibleSubmissions.length && (
             <div className="emptyState">
               <FileText size={42} />
-              <b>No tiene informes asignados</b>
-              <span>Cuando un coordinador le asigne un anexo o subinforme, aparecerá aquí automáticamente.</span>
+              <b>No tiene informes activos para este hospital</b>
+              <span>Los informes de meses cerrados se retiran automáticamente. Cuando el coordinador abra un nuevo mes y asigne obligaciones, aparecerán aquí.</span>
             </div>
           )}
         </div>

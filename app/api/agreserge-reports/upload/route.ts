@@ -50,6 +50,16 @@ export async function POST(request: Request) {
     const supabase = requireSupabaseAdmin() as any;
     const submission = await supabase.from("agreserge_report_submissions").select("*").eq("id", id).single();
     if (submission.error) throw submission.error;
+    const period = await supabase.from("agreserge_report_periods")
+      .select("estado")
+      .eq("id", submission.data.period_id)
+      .single();
+    if (period.error) throw period.error;
+    if (period.data.estado === "Cerrado")
+      return NextResponse.json(
+        { error: "Este mes ya fue cerrado. Sus obligaciones quedaron archivadas y no admite nuevas cargas." },
+        { status: 423 },
+      );
     if (["Aprobado", "Con observación"].includes(submission.data.estado))
       return NextResponse.json(
         { error: "Este soporte ya fue revisado y quedó bloqueado hasta el próximo mes." },
