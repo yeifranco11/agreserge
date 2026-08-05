@@ -42,6 +42,7 @@ import {
   uploadDocument,
 } from "../lib/agreserge-client";
 import { reportAnnexLabel } from "../lib/hospital-report-config";
+import { hasCrossHospitalReportAccess } from "../lib/agreserge-report-access";
 import { driveTemplate } from "../lib/drive-templates";
 import { NominaComprobantes, SolicitudesFirmas } from "./components/operations";
 import {
@@ -2007,8 +2008,9 @@ function Informes({ db, session }: any) {
     return period?.estado !== "Cerrado" &&
       (!hospitalFilter || period?.entidad_id === hospitalFilter);
   });
+  const crossHospitalAccess = hasCrossHospitalReportAccess(session);
   const leaders = db.usuarios.filter((user: Usuario) =>
-    user.activo && user.entidadId === session.entidadId &&
+    user.activo && (crossHospitalAccess || user.entidadId === session.entidadId) &&
     [
       "Líder de Proceso", "Líder Institucional", "Coordinador de Proceso AGRESERGE",
       "Coordinadora Administrativa y Financiera", "Coordinación Administrativa",
@@ -2044,7 +2046,9 @@ function Informes({ db, session }: any) {
           <span className="badge">MIS RESPONSABILIDADES</span>
           <h2>Informes de actividades</h2>
           <p className="muted">
-            Aquí aparecen exclusivamente los anexos y subinformes asignados a {session.nombre}.
+            {crossHospitalAccess
+              ? "Acceso institucional AGRESERGE: consulte y cargue informes de todos los hospitales con mes abierto."
+              : `Aquí aparecen exclusivamente los anexos y subinformes asignados a ${session.nombre}.`}
           </p>
         </div>
         <span className={`pill ${error ? "bad" : "ok"}`}>{error || (loading ? "Sincronizando…" : `${visibleSubmissions.length} asignaciones activas`)}</span>

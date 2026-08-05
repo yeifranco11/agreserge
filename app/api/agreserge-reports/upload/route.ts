@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSessionUserId } from "../../../../lib/agreserge-auth";
 import { loadDB } from "../../../../lib/agreserge-db";
+import { hasCrossHospitalReportAccess } from "../../../../lib/agreserge-report-access";
 import { importReportFromUrl } from "../../../../lib/apps-script-drive";
 import { requireSupabaseAdmin } from "../../../../lib/supabase-admin";
 
@@ -73,7 +74,12 @@ export async function POST(request: Request) {
       parent.data?.responsable_id === actor.id ||
       parent.data?.delegado_por_id === actor.id ||
       responsible?.liderId === actor.id;
-    if (submission.data.responsable_id !== actor.id && !isLeader && !supervisors.has(actor.rol))
+    if (
+      submission.data.responsable_id !== actor.id &&
+      !isLeader &&
+      !supervisors.has(actor.rol) &&
+      !hasCrossHospitalReportAccess(actor)
+    )
       return NextResponse.json({ error: "Este anexo está asignado a otra persona" }, { status: 403 });
     if (action === "prepare") {
       const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
