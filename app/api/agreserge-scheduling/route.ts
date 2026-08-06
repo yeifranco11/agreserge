@@ -53,3 +53,21 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: error.message }, { status });
   }
 }
+
+export async function DELETE(request: Request) {
+  try {
+    const supabase = await context();
+    const body = await request.json();
+    if (!body.bookingId) {
+      return NextResponse.json({ error: "Reserva requerida" }, { status: 400 });
+    }
+    const result = await supabase.from("agreserge_schedule_bookings")
+      .delete().eq("id", body.bookingId).select("id").maybeSingle();
+    if (result.error) throw result.error;
+    if (!result.data) return NextResponse.json({ error: "La reserva ya no existe" }, { status: 404 });
+    return NextResponse.json({ ok: true });
+  } catch (error: any) {
+    const status = /Sesión|permiso/.test(error.message) ? 403 : 500;
+    return NextResponse.json({ error: error.message }, { status });
+  }
+}
