@@ -73,7 +73,7 @@ export default function PublicSchedulePage() {
       <div><span className={styles.eyebrow}>Agenda pública · Hospital Gonzalo Contreras</span>
         <h1>Pruebas <em>psicotécnicas</em></h1>
         <p>Ingresa tus nombres, apellidos y documento, selecciona un horario disponible y recibe tu confirmación al instante.</p>
-        <div className={styles.features}><span><CalendarDays /> 10 al 13 de agosto</span><span><Users /> 8 cupos por horario</span><span><MapPin /> {campaign?.ubicacion || "Hospital Gonzalo Contreras E.S.E."}</span></div>
+        <div className={styles.features}><span><CalendarDays /> 10–13 y 18–20 de agosto</span><span><Users /> 8 cupos por horario</span><span><MapPin /> {campaign?.ubicacion || "Hospital Gonzalo Contreras E.S.E."}</span></div>
       </div>
       <div className={styles.heroArt}><CalendarDays /><b>Agenda</b><span>AGRESERGE</span></div>
     </section>
