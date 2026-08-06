@@ -4,6 +4,10 @@ import { requireSupabaseAdmin } from "../../../../lib/supabase-admin";
 export const dynamic = "force-dynamic";
 const CAMPAIGN = "pruebas-psicotecnicas-hgc-agosto-2026";
 const digits = (value: unknown) => String(value ?? "").replace(/\D/g, "");
+const canonicalName = (value: unknown) => String(value ?? "")
+  .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+  .toUpperCase().replace(/[^A-Z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+const identityError = "Los datos no coinciden con un afiliado activo del Hospital Gonzalo Contreras.";
 
 async function schedule(supabase: any) {
   const campaignResult = await supabase.from("agreserge_schedule_campaigns")
@@ -53,48 +57,26 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const documento = digits(body.documento);
+    const nombre = canonicalName(body.nombre);
     if (documento.length < 5 || documento.length > 15) {
       return NextResponse.json({ error: "Escribe un número de documento válido." }, { status: 400 });
+    }
+    if (body.action !== "book" || !body.slotId || nombre.length < 5) {
+      return NextResponse.json({ error: "Completa nombres, apellidos, documento y horario." }, { status: 400 });
     }
     const supabase = requireSupabaseAdmin() as any;
     const profileResult = await supabase.from("agreserge_profiles")
       .select("user_id,documento").eq("documento", documento).maybeSingle();
     if (profileResult.error) throw profileResult.error;
     if (!profileResult.data) {
-      return NextResponse.json({ error: "La cédula no está registrada en Hospital Gonzalo Contreras." }, { status: 404 });
+      return NextResponse.json({ error: identityError }, { status: 400 });
     }
     const userResult = await supabase.from("agreserge_users")
-      .select("id,nombre,cargo,area_id,entidad_id,activo")
+      .select("id,nombre,entidad_id,activo")
       .eq("id", profileResult.data.user_id).eq("entidad_id", "hgc").eq("activo", true).maybeSingle();
     if (userResult.error) throw userResult.error;
-    if (!userResult.data) {
-      return NextResponse.json({ error: "La cédula no corresponde a un afiliado activo de Hospital Gonzalo Contreras." }, { status: 404 });
-    }
-    const areaResult = userResult.data.area_id
-      ? await supabase.from("agreserge_areas").select("nombre").eq("id", userResult.data.area_id).maybeSingle()
-      : { data: null, error: null };
-    if (areaResult.error) throw areaResult.error;
-    const person = {
-      documento,
-      nombre: String(userResult.data.nombre).trim().replace(/\s+/g, " ").toUpperCase(),
-      area: String(areaResult.data?.nombre || userResult.data.cargo || "SIN ÁREA REGISTRADA").toUpperCase(),
-    };
-
-    const campaignResult = await supabase.from("agreserge_schedule_campaigns")
-      .select("id").eq("slug", CAMPAIGN).maybeSingle();
-    if (campaignResult.error) throw campaignResult.error;
-    const existingResult = campaignResult.data
-      ? await supabase.from("agreserge_schedule_bookings")
-        .select("id,fecha:agreserge_schedule_slots!slot_id(fecha,hora),estado")
-        .eq("campaign_id", campaignResult.data.id).eq("user_id", userResult.data.id)
-        .neq("estado", "CANCELADA").maybeSingle()
-      : { data: null, error: null };
-    if (existingResult.error) throw existingResult.error;
-    if (body.action === "lookup") {
-      return NextResponse.json({ person, booking: existingResult.data });
-    }
-    if (body.action !== "book" || !body.slotId) {
-      return NextResponse.json({ error: "Solicitud no válida." }, { status: 400 });
+    if (!userResult.data || canonicalName(userResult.data.nombre) !== nombre) {
+      return NextResponse.json({ error: identityError }, { status: 400 });
     }
     const bookingResult = await supabase.rpc("agreserge_book_psychotechnical_slot", {
       p_slot_id: body.slotId,
@@ -111,7 +93,7 @@ export async function POST(request: Request) {
       };
       return NextResponse.json({ error: messages[code || ""] || "No fue posible confirmar la reserva." }, { status: 409 });
     }
-    return NextResponse.json({ ok: true, booking: bookingResult.data, person });
+    return NextResponse.json({ ok: true, booking: bookingResult.data });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || "No se pudo procesar el agendamiento." }, { status: 500 });
   }
