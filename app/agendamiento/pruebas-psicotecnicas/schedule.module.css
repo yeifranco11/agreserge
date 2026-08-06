@@ -225,6 +225,43 @@
   align-items: end;
   gap: 14px;
 }
+.newPerson {
+  margin: 22px 0 30px;
+  padding: 24px;
+  border: 1px solid #b9d9f7;
+  border-radius: 22px;
+  background: linear-gradient(145deg, #f3f9ff, #ffffff);
+}
+.newPersonTitle {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  margin-bottom: 20px;
+}
+.newPersonTitle > svg {
+  width: 42px;
+  height: 42px;
+  padding: 10px;
+  border-radius: 13px;
+  color: #086fc7;
+  background: #dceeff;
+}
+.newPersonTitle div { display: flex; flex-direction: column; gap: 3px; }
+.newPersonTitle strong { font-size: 18px; }
+.newPersonTitle span { color: #637891; }
+.newPersonFields { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.newPerson label { display: block; margin-bottom: 7px; font-size: 13px; font-weight: 800; }
+.newPerson > button {
+  margin-top: 18px;
+  border: 0;
+  border-radius: 13px;
+  padding: 14px 20px;
+  background: linear-gradient(135deg, #075daf, #1299dc);
+  color: white;
+  font-weight: 900;
+  cursor: pointer;
+}
+@media (max-width: 700px) { .newPersonFields { grid-template-columns: 1fr; } }
 .lookup label {
   font-weight: 850;
   display: block;

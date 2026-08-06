@@ -5,7 +5,7 @@ import { CalendarDays, CheckCircle2, Clock3, IdCard, MapPin, ShieldCheck, UserRo
 import styles from "./schedule.module.css";
 
 type Slot = { id: string; fecha: string; hora: string; capacidad: number; disponibles: number };
-type Person = { documento: string; nombre: string };
+type Person = { documento: string; nombre: string; area: string; isNew?: boolean };
 const dateLabel = (value: string) => new Intl.DateTimeFormat("es-CO", {
   weekday: "long", day: "numeric", month: "long",
   timeZone: "UTC",
@@ -19,6 +19,8 @@ export default function PublicSchedulePage() {
   const [campaign, setCampaign] = useState<any>(null);
   const [documento, setDocumento] = useState("");
   const [nombre, setNombre] = useState("");
+  const [area, setArea] = useState("");
+  const [notFound, setNotFound] = useState(false);
   const [person, setPerson] = useState<Person | null>(null);
   const [selected, setSelected] = useState<Slot | null>(null);
   const [confirmed, setConfirmed] = useState<any>(null);
@@ -39,13 +41,35 @@ export default function PublicSchedulePage() {
   }, []);
 
   const days = useMemo(() => Array.from(new Set(slots.map((slot) => slot.fecha))), [slots]);
-  const identify = (event: React.FormEvent) => {
+  const identify = async (event: React.FormEvent) => {
     event.preventDefault(); setError(""); setSelected(null); setConfirmed(null);
+    setPerson(null); setNotFound(false);
+    if (documento.length < 5) { setError("Escribe un número de documento válido."); return; }
+    setBusy(true);
+    try {
+      const response = await fetch("/api/public/psychotechnical-schedule", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "lookup", documento }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error);
+      if (payload.found) {
+        setNombre(payload.person.nombre); setArea(payload.person.area); setPerson(payload.person);
+      } else {
+        setNombre(""); setArea(""); setNotFound(true);
+      }
+    } catch (e: any) { setError(e.message); }
+    finally { setBusy(false); }
+  };
+  const createPerson = (event: React.FormEvent) => {
+    event.preventDefault(); setError("");
     const cleanName = nombre.trim().replace(/\s+/g, " ").toUpperCase();
-    if (cleanName.length < 5 || documento.length < 5) {
-      setError("Completa tus nombres, apellidos y número de documento."); return;
+    const cleanArea = area.trim().replace(/\s+/g, " ").toUpperCase();
+    if (cleanName.length < 5 || cleanArea.length < 2) {
+      setError("Completa nombres, apellidos y área o servicio."); return;
     }
-    setNombre(cleanName); setPerson({ nombre: cleanName, documento });
+    setNombre(cleanName); setArea(cleanArea);
+    setPerson({ documento, nombre: cleanName, area: cleanArea, isNew: true });
   };
   const book = async () => {
     if (!selected || !person) return;
@@ -53,7 +77,7 @@ export default function PublicSchedulePage() {
     try {
       const response = await fetch("/api/public/psychotechnical-schedule", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "book", nombre: person.nombre, documento: person.documento, slotId: selected.id }),
+        body: JSON.stringify({ action: "book", nombre: person.nombre, area: person.area, register: person.isNew, documento: person.documento, slotId: selected.id }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error);
@@ -72,7 +96,7 @@ export default function PublicSchedulePage() {
     <section className={styles.hero}>
       <div><span className={styles.eyebrow}>Agenda pública · Hospital Gonzalo Contreras</span>
         <h1>Pruebas <em>psicotécnicas</em></h1>
-        <p>Ingresa tus nombres, apellidos y documento, selecciona un horario disponible y recibe tu confirmación al instante.</p>
+        <p>Ingresa únicamente tu número de documento. Cargaremos automáticamente tus datos registrados para que puedas elegir un horario.</p>
         <div className={styles.features}><span><CalendarDays /> 10–13 y 18–20 de agosto</span><span><Users /> 8 cupos por horario</span><span><MapPin /> {campaign?.ubicacion || "Hospital Gonzalo Contreras E.S.E."}</span></div>
       </div>
       <div className={styles.heroArt}><CalendarDays /><b>Agenda</b><span>AGRESERGE</span></div>
@@ -81,9 +105,10 @@ export default function PublicSchedulePage() {
     <section className={styles.panel}>
       <div className={styles.steps}><span className={person ? styles.done : styles.current}>1 <b>Identifícate</b></span><i /><span className={selected ? styles.done : person ? styles.current : ""}>2 <b>Elige horario</b></span><i /><span className={confirmed ? styles.done : selected ? styles.current : ""}>3 <b>Confirma</b></span></div>
       {!confirmed && <>
-        <form className={styles.lookup} onSubmit={identify}><div><label>Nombres y apellidos</label><div className={styles.inputWrap}><UserRound /><input value={nombre} onChange={(e) => setNombre(e.target.value.toUpperCase())} autoComplete="name" placeholder="NOMBRES Y APELLIDOS" required /></div></div><div><label>Número de documento</label><div className={styles.inputWrap}><IdCard /><input value={documento} onChange={(e) => setDocumento(e.target.value.replace(/\D/g, "").slice(0, 15))} inputMode="numeric" placeholder="Escribe tu cédula" required /></div><small>Validaremos los datos de forma segura al confirmar.</small></div><button>Continuar</button></form>
+        {!person && <form className={styles.lookup} onSubmit={identify}><div><label>Número de documento</label><div className={styles.inputWrap}><IdCard /><input value={documento} onChange={(e) => { setDocumento(e.target.value.replace(/\D/g, "").slice(0, 15)); setNotFound(false); }} inputMode="numeric" placeholder="Escribe tu cédula" required autoFocus /></div><small>Consultaremos de forma segura tus datos registrados.</small></div><button disabled={busy}>{busy ? "Consultando…" : "Consultar mis datos"}</button></form>}
+        {notFound && !person && <form className={styles.newPerson} onSubmit={createPerson}><div className={styles.newPersonTitle}><UserRound /><div><strong>No encontramos esta cédula</strong><span>Puedes crear el registro para continuar con tu agendamiento.</span></div></div><div className={styles.newPersonFields}><div><label>Nombres y apellidos</label><div className={styles.inputWrap}><UserRound /><input value={nombre} onChange={(e) => setNombre(e.target.value.toUpperCase())} placeholder="NOMBRES Y APELLIDOS" required /></div></div><div><label>Área o servicio</label><div className={styles.inputWrap}><MapPin /><input value={area} onChange={(e) => setArea(e.target.value.toUpperCase())} placeholder="ÁREA O SERVICIO" required /></div></div></div><button>Crear registro y continuar</button></form>}
         {error && <div className={styles.error}>{error}</div>}
-        {person && <div className={styles.person}><CheckCircle2 /><div><span>Datos registrados</span><strong>{person.nombre}</strong><small>Documento {person.documento}</small></div><button onClick={() => { setPerson(null); setSelected(null); }}>Cambiar</button></div>}
+        {person && <div className={styles.person}><CheckCircle2 /><div><span>{person.isNew ? "Nuevo registro listo" : "Datos encontrados"}</span><strong>{person.nombre}</strong><small>Documento {person.documento} · {person.area}</small></div><button onClick={() => { setPerson(null); setSelected(null); setNotFound(false); }}>Consultar otra cédula</button></div>}
         {person && <div className={styles.calendar}><div className={styles.sectionTitle}><span>2</span><div><h2>Selecciona tu horario</h2><p>Los cupos se actualizan automáticamente.</p></div></div>
           <div className={styles.days}>{days.map((day) => <article key={day}><header><CalendarDays /><div><span>{dateLabel(day).split(" ")[0]}</span><b>{dateLabel(day).split(" ").slice(1).join(" ")}</b></div></header><div>{slots.filter((slot) => slot.fecha === day).map((slot) => <button type="button" key={slot.id} disabled={!slot.disponibles} onClick={() => setSelected(slot)} className={selected?.id === slot.id ? styles.selected : ""}><Clock3 /><span><b>{timeLabel(slot.hora)}</b><small>{slot.disponibles ? `${slot.disponibles} de ${slot.capacidad} disponibles` : "Cupos agotados"}</small></span>{selected?.id === slot.id && <CheckCircle2 />}</button>)}</div></article>)}</div>
         </div>}

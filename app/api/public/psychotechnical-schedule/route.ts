@@ -9,6 +9,34 @@ const canonicalName = (value: unknown) => String(value ?? "")
   .toUpperCase().replace(/[^A-Z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
 const identityError = "Los datos no coinciden con un afiliado activo del Hospital Gonzalo Contreras.";
 
+async function findPerson(supabase: any, documento: string) {
+  const profileResult = await supabase.from("agreserge_profiles")
+    .select("user_id,documento").eq("documento", documento).maybeSingle();
+  if (profileResult.error) throw profileResult.error;
+  if (!profileResult.data) return { found: false };
+
+  const userResult = await supabase.from("agreserge_users")
+    .select("id,nombre,entidad_id,area_id,cargo,activo")
+    .eq("id", profileResult.data.user_id).maybeSingle();
+  if (userResult.error) throw userResult.error;
+  if (!userResult.data || userResult.data.entidad_id !== "hgc" || !userResult.data.activo) {
+    return { found: false, unavailable: true };
+  }
+
+  const areaResult = userResult.data.area_id
+    ? await supabase.from("agreserge_areas").select("nombre").eq("id", userResult.data.area_id).maybeSingle()
+    : { data: null, error: null };
+  if (areaResult.error) throw areaResult.error;
+  return {
+    found: true,
+    person: {
+      documento,
+      nombre: canonicalName(userResult.data.nombre),
+      area: canonicalName(areaResult.data?.nombre || userResult.data.cargo || "SIN ÁREA REGISTRADA"),
+    },
+  };
+}
+
 async function schedule(supabase: any) {
   const campaignResult = await supabase.from("agreserge_schedule_campaigns")
     .select("id,slug,titulo,descripcion,ubicacion,activa")
@@ -61,22 +89,54 @@ export async function POST(request: Request) {
     if (documento.length < 5 || documento.length > 15) {
       return NextResponse.json({ error: "Escribe un número de documento válido." }, { status: 400 });
     }
-    if (body.action !== "book" || !body.slotId || nombre.length < 5) {
-      return NextResponse.json({ error: "Completa nombres, apellidos, documento y horario." }, { status: 400 });
-    }
     const supabase = requireSupabaseAdmin() as any;
-    const profileResult = await supabase.from("agreserge_profiles")
-      .select("user_id,documento").eq("documento", documento).maybeSingle();
-    if (profileResult.error) throw profileResult.error;
-    if (!profileResult.data) {
-      return NextResponse.json({ error: identityError }, { status: 400 });
+
+    const lookup = await findPerson(supabase, documento);
+    if (body.action === "lookup") {
+      if (lookup.unavailable) {
+        return NextResponse.json({ error: identityError }, { status: 403 });
+      }
+      return NextResponse.json(lookup);
     }
-    const userResult = await supabase.from("agreserge_users")
-      .select("id,nombre,entidad_id,activo")
-      .eq("id", profileResult.data.user_id).eq("entidad_id", "hgc").eq("activo", true).maybeSingle();
-    if (userResult.error) throw userResult.error;
-    if (!userResult.data || canonicalName(userResult.data.nombre) !== nombre) {
-      return NextResponse.json({ error: identityError }, { status: 400 });
+
+    if (body.action !== "book" || !body.slotId) {
+      return NextResponse.json({ error: "Selecciona un horario disponible." }, { status: 400 });
+    }
+
+    if (!lookup.found) {
+      const area = canonicalName(body.area);
+      if (!body.register || nombre.length < 5 || area.length < 2) {
+        return NextResponse.json({ error: "Completa nombres, apellidos y área o servicio para crear el registro." }, { status: 400 });
+      }
+      const userId = crypto.randomUUID();
+      const userInsert = await supabase.from("agreserge_users").insert({
+        id: userId,
+        nombre,
+        correo: `agenda.${documento}@registro.agreserge.local`,
+        usuario: documento,
+        rol: "Agremiado",
+        tipo: "Asistencial",
+        entidad_id: "hgc",
+        cargo: area,
+        activo: true,
+      });
+      if (userInsert.error) {
+        if (String(userInsert.error.message).toLowerCase().includes("duplicate")) {
+          return NextResponse.json({ error: "La cédula ya tiene un registro. Vuelve a consultarla." }, { status: 409 });
+        }
+        throw userInsert.error;
+      }
+      const profileInsert = await supabase.from("agreserge_profiles").insert({
+        user_id: userId,
+        documento,
+        estado_laboral: "Activo",
+        proceso: area,
+        fuente_origen: "Agenda pública pruebas psicotécnicas",
+      });
+      if (profileInsert.error) {
+        await supabase.from("agreserge_users").delete().eq("id", userId);
+        throw profileInsert.error;
+      }
     }
     const bookingResult = await supabase.rpc("agreserge_book_psychotechnical_slot", {
       p_slot_id: body.slotId,
