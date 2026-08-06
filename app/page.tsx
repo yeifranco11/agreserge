@@ -5,6 +5,7 @@ import {
   BarChart3,
   Bot,
   Building2,
+  CalendarDays,
   CheckCircle2,
   ClipboardCheck,
   Download,
@@ -45,6 +46,7 @@ import { reportAnnexLabel } from "../lib/hospital-report-config";
 import { hasCrossHospitalReportAccess } from "../lib/agreserge-report-access";
 import { driveTemplate } from "../lib/drive-templates";
 import { NominaComprobantes, SolicitudesFirmas } from "./components/operations";
+import { PsychotechnicalScheduling } from "./components/psychotechnical-scheduling";
 import {
   documentRequirements,
   healthcareCourseDetails,
@@ -257,6 +259,7 @@ const roles: Rol[] = [
 const modulos = [
   "Inicio",
   "Dashboard gerente",
+  "Agendamiento · Pruebas psicotécnicas",
   "Parámetros institucionales",
   "Ficha técnica",
   "Cargue documental",
@@ -842,6 +845,7 @@ function Content(p: any) {
   const { nav } = p;
   if (nav === "Inicio") return <Inicio {...p} />;
   if (nav === "Dashboard gerente") return <Dashboard {...p} />;
+  if (nav === "Agendamiento · Pruebas psicotécnicas") return <PsychotechnicalScheduling />;
   if (nav === "Parámetros institucionales") return <Parametros {...p} />;
   if (nav === "Ficha técnica") return <TechnicalProfiles {...p} />;
   if (nav === "Cargue documental") return <Cargue {...p} />;
@@ -3623,6 +3627,7 @@ function Auditoria({ db }: any) {
 }
 function icon(m: string) {
   const props = { size: 17 };
+  if (m.includes("Agendamiento")) return <CalendarDays {...props} />;
   if (m.includes("AGREBOT")) return <Bot {...props} />;
   if (m.includes("Parámetros")) return <Building2 {...props} />;
   if (m.includes("Permisos")) return <Settings {...props} />;
