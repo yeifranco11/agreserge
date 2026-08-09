@@ -47,6 +47,7 @@ import { hasCrossHospitalReportAccess } from "../lib/agreserge-report-access";
 import { driveTemplate } from "../lib/drive-templates";
 import { NominaComprobantes, SolicitudesFirmas } from "./components/operations";
 import { PsychotechnicalScheduling } from "./components/psychotechnical-scheduling";
+import { PsychologyDashboard } from "./components/psychology-dashboard";
 import {
   documentRequirements,
   healthcareCourseDetails,
@@ -77,6 +78,7 @@ type Rol =
   | "Asesora de Calidad"
   | "Director Ejecutivo"
   | "Seguridad y Salud en el Trabajo"
+  | "Psicología"
   | "Gerente";
 type EstadoDoc =
   "Pendiente" | "Cargado" | "Aprobado" | "Rechazado" | "Devuelto";
@@ -254,12 +256,14 @@ const roles: Rol[] = [
   "Experiencia al Agremiado",
   "Director Ejecutivo",
   "Seguridad y Salud en el Trabajo",
+  "Psicología",
   "Administrador de Sistemas",
 ];
 const modulos = [
   "Inicio",
   "Dashboard gerente",
   "Agendamiento · Pruebas psicotécnicas",
+  "Psicología",
   "Parámetros institucionales",
   "Ficha técnica",
   "Cargue documental",
@@ -550,6 +554,7 @@ const seed = (): DB => ({
     "Coordinadora Administrativa y Financiera": [
       "Inicio",
       "Dashboard gerente",
+      "Psicología",
       "Informes de actividades",
       "Asignación mensual",
       "Nómina y comprobantes",
@@ -573,6 +578,7 @@ const seed = (): DB => ({
     ],
     "Administrador de Sistemas": [
       "Inicio",
+      "Psicología",
       "Parámetros institucionales",
       "Nómina y comprobantes",
       "Solicitudes y firmas",
@@ -846,6 +852,7 @@ function Content(p: any) {
   if (nav === "Inicio") return <Inicio {...p} />;
   if (nav === "Dashboard gerente") return <Dashboard {...p} />;
   if (nav === "Agendamiento · Pruebas psicotécnicas") return <PsychotechnicalScheduling />;
+  if (nav === "Psicología") return <PsychologyDashboard />;
   if (nav === "Parámetros institucionales") return <Parametros {...p} />;
   if (nav === "Ficha técnica") return <TechnicalProfiles {...p} />;
   if (nav === "Cargue documental") return <Cargue {...p} />;
@@ -3627,6 +3634,7 @@ function Auditoria({ db }: any) {
 }
 function icon(m: string) {
   const props = { size: 17 };
+  if (m.includes("Psicología")) return <ClipboardCheck {...props} />;
   if (m.includes("Agendamiento")) return <CalendarDays {...props} />;
   if (m.includes("AGREBOT")) return <Bot {...props} />;
   if (m.includes("Parámetros")) return <Building2 {...props} />;
