@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSessionUserId } from "../../../lib/agreserge-auth";
 import { requireSupabaseAdmin } from "../../../lib/supabase-admin";
+import { scorePsychologyAssessment } from "../../../lib/psychology-scoring";
 
 export const dynamic = "force-dynamic";
 const allowed = new Set(["Administrador de Sistemas", "Coordinadora Administrativa y Financiera", "Coordinación Administrativa", "Psicología", "Talento Humano", "Seguridad y Salud en el Trabajo"]);
@@ -19,7 +20,11 @@ export async function GET() {
     const supabase = requireSupabaseAdmin() as any;
     const result = await supabase.from("agreserge_psychology_assessments").select("*").order("updated_at", { ascending: false });
     if (result.error) throw result.error;
-    return NextResponse.json({ assessments: result.data || [] });
+    const assessments = (result.data || []).map((assessment: any) => ({
+      ...assessment,
+      analysis: scorePsychologyAssessment(assessment.responses),
+    }));
+    return NextResponse.json({ assessments });
   } catch (error: any) { return NextResponse.json({ error: error.message || "No se pudieron consultar los resultados" }, { status: 500 }); }
 }
 

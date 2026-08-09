@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { psychologyQuestions, responseSummary } from "../../../../lib/psychology-16pf";
+import { scorePsychologyAssessment } from "../../../../lib/psychology-scoring";
 import { requireSupabaseAdmin } from "../../../../lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
@@ -57,7 +58,7 @@ export async function GET() {
     const supabase = requireSupabaseAdmin() as any;
     const assessment = await assessmentFor(supabase, userId);
     if (!assessment) return NextResponse.json({ error: "Aplicación no encontrada" }, { status: 404 });
-    return NextResponse.json({ questions: psychologyQuestions, assessment, person: { nombre: assessment.nombre_completo, entidad: assessment.entidad_nombre, area: assessment.area_nombre } });
+    return NextResponse.json({ questions: psychologyQuestions, assessment: { ...assessment, analysis: scorePsychologyAssessment(assessment.responses) }, person: { nombre: assessment.nombre_completo, entidad: assessment.entidad_nombre, area: assessment.area_nombre } });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || "No se pudo abrir el cuestionario" }, { status: 500 });
   }
@@ -101,13 +102,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `Faltan ${psychologyQuestions.length - responses.length} respuestas` }, { status: 400 });
     }
     const now = new Date().toISOString();
+    const analysis = scorePsychologyAssessment(responses);
     const result = await supabase.from("agreserge_psychology_assessments").update({
       responses, response_summary: responseSummary(responses),
       status: body.action === "complete" ? "COMPLETADO" : "EN_PROGRESO",
       completed_at: body.action === "complete" ? now : null, updated_at: now,
     }).eq("user_id", userId).eq("instrument_version", VERSION);
     if (result.error) throw result.error;
-    return NextResponse.json({ ok: true, summary: responseSummary(responses) });
+    return NextResponse.json({ ok: true, summary: responseSummary(responses), analysis });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || "No fue posible guardar las respuestas" }, { status: 500 });
   }
