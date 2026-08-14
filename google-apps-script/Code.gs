@@ -1,6 +1,7 @@
 const MASTER_FOLDER_ID = '1L6WrnOjq1ui19SQrzWvSqe5rLHKC-b60';
 const PAYROLL_SPREADSHEET_ID = '11R2hU9IzD55MBa8FivztC38boeQAxGpoMly_3yH0Ajk';
 const CERTIFICATES_SPREADSHEET_ID = '18C_XksYLi9wjhYLsTK_eZtQ2_LnaGrevlsJ4Y8lU7J4';
+const PORTAL_SECRET_HASH = '203c19ebfa2bca227e3f5a450408c7161eca6e9865c8aea7697993fadf22d84f';
 
 function doGet() {
   return json_({ ok: true, service: 'AGRESERGE Drive Bridge' });
@@ -9,8 +10,7 @@ function doGet() {
 function doPost(e) {
   try {
     const input = JSON.parse((e && e.postData && e.postData.contents) || '{}');
-    const expected = PropertiesService.getScriptProperties().getProperty('PORTAL_SECRET');
-    if (!expected || input.secret !== expected) throw new Error('Acceso no autorizado');
+    if (sha256_(String(input.secret || '')) !== PORTAL_SECRET_HASH) throw new Error('Acceso no autorizado');
     if (input.action === 'openPeriod') return json_(openPeriod_(input));
     if (input.action === 'consolidate') return json_(consolidate_(input));
     if (input.action === 'importReportFile') return json_(importReportFile_(input));
@@ -23,6 +23,12 @@ function doPost(e) {
   } catch (error) {
     return json_({ ok: false, error: String(error.message || error) });
   }
+}
+
+function sha256_(value) {
+  return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, value, Utilities.Charset.UTF_8)
+    .map(function(byte) { return ('0' + ((byte + 256) % 256).toString(16)).slice(-2); })
+    .join('');
 }
 
 function certificateTracking_(input) {
