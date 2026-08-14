@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getSessionUserId, hashPassword } from "../../../lib/agreserge-auth";
 import { loadDB } from "../../../lib/agreserge-db";
 import { canAdmin } from "../../../lib/agreserge-permissions";
+import { hasCrossHospitalReportAccess } from "../../../lib/agreserge-report-access";
 import { consolidateDrivePeriod, createDriveSubreport, openDrivePeriod, resetDrivePeriods } from "../../../lib/apps-script-drive";
 import {
   HGC_ADMIN_LEADERS,
@@ -184,11 +185,14 @@ async function syncPeriodStructure({
 export async function GET(request: Request) {
   try {
     const { actor, supabase } = await context();
-    const mineOnly = new URL(request.url).searchParams.get("scope") === "mine";
+    const searchParams = new URL(request.url).searchParams;
+    const mineOnly = searchParams.get("scope") === "mine";
+    const requestedEntityId = String(searchParams.get("entidadId") || "").trim();
     const superManager = ["Administrador de Sistemas", "Coordinación AGRESERGE", "Coordinación General", "Coordinador General", "Director Ejecutivo"].includes(actor.rol);
+    const crossHospitalAccess = hasCrossHospitalReportAccess(actor);
     const manager = superManager || ["Coordinadora Administrativa y Financiera", "Coordinación Administrativa", "Coordinación Asistencial", "Coordinador de Proceso AGRESERGE", "Líder Institucional", "Líder de Proceso"].includes(actor.rol);
     let submissions = supabase.from("agreserge_report_submissions").select("*, obligation:agreserge_report_obligations(*), annex:agreserge_report_annexes(*)").order("orden");
-    if (mineOnly || !superManager) {
+    if (!crossHospitalAccess && (mineOnly || !superManager)) {
       submissions = manager
         ? submissions.or(`responsable_id.eq.${actor.id},delegado_por_id.eq.${actor.id}`)
         : submissions.eq("responsable_id", actor.id);
@@ -209,11 +213,19 @@ export async function GET(request: Request) {
       list.push(file);
       filesBySubmission.set(file.submission_id, list);
     }
+    const visiblePeriods = (periods.data || []).filter((period: any) =>
+      (!mineOnly || period.estado !== "Cerrado") &&
+      (!requestedEntityId || period.entidad_id === requestedEntityId),
+    );
+    const visiblePeriodIds = new Set(visiblePeriods.map((period: any) => period.id));
+    const visibleSubmissions = (submissionRows.data || []).filter((submission: any) =>
+      (!mineOnly && !requestedEntityId) || visiblePeriodIds.has(submission.period_id),
+    );
     return NextResponse.json({
-      periods: periods.data || [],
+      periods: visiblePeriods,
       obligations: obligations.data || [],
       annexes: annexes.data || [],
-      submissions: (submissionRows.data || []).map((submission: any) => ({
+      submissions: visibleSubmissions.map((submission: any) => ({
         ...submission,
         files: filesBySubmission.get(submission.id) || [],
       })),

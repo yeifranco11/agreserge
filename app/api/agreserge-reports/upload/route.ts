@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSessionUserId } from "../../../../lib/agreserge-auth";
 import { loadDB } from "../../../../lib/agreserge-db";
+import { hasCrossHospitalReportAccess } from "../../../../lib/agreserge-report-access";
 import { importReportFromUrl } from "../../../../lib/apps-script-drive";
 import { requireSupabaseAdmin } from "../../../../lib/supabase-admin";
 
@@ -50,6 +51,16 @@ export async function POST(request: Request) {
     const supabase = requireSupabaseAdmin() as any;
     const submission = await supabase.from("agreserge_report_submissions").select("*").eq("id", id).single();
     if (submission.error) throw submission.error;
+    const period = await supabase.from("agreserge_report_periods")
+      .select("estado")
+      .eq("id", submission.data.period_id)
+      .single();
+    if (period.error) throw period.error;
+    if (period.data.estado === "Cerrado")
+      return NextResponse.json(
+        { error: "Este mes ya fue cerrado. Sus obligaciones quedaron archivadas y no admite nuevas cargas." },
+        { status: 423 },
+      );
     if (["Aprobado", "Con observación"].includes(submission.data.estado))
       return NextResponse.json(
         { error: "Este soporte ya fue revisado y quedó bloqueado hasta el próximo mes." },
@@ -63,7 +74,12 @@ export async function POST(request: Request) {
       parent.data?.responsable_id === actor.id ||
       parent.data?.delegado_por_id === actor.id ||
       responsible?.liderId === actor.id;
-    if (submission.data.responsable_id !== actor.id && !isLeader && !supervisors.has(actor.rol))
+    if (
+      submission.data.responsable_id !== actor.id &&
+      !isLeader &&
+      !supervisors.has(actor.rol) &&
+      !hasCrossHospitalReportAccess(actor)
+    )
       return NextResponse.json({ error: "Este anexo está asignado a otra persona" }, { status: 403 });
     if (action === "prepare") {
       const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
