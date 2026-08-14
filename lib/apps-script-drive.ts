@@ -161,3 +161,18 @@ export async function loadCertificateTracking(days = 60) {
   if (!response.ok || !payload?.ok) throw new Error(payload?.error || 'No se pudo consultar la base de certificados.');
   return payload;
 }
+
+export async function markCertificateAlerts(days = 60) {
+  const url = process.env.GOOGLE_APPS_SCRIPT_URL;
+  const secret = process.env.GOOGLE_APPS_SCRIPT_SECRET;
+  if (!url || !secret) throw new Error('La integración con Google Sheets no está configurada.');
+  const response = await fetch(url, {
+    method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action: 'markCertificateAlerts', secret, days }), redirect: 'follow', cache: 'no-store',
+  });
+  const raw = await response.text();
+  let payload: any = {};
+  try { payload = JSON.parse(raw); } catch {}
+  if (!response.ok || !payload?.ok) throw new Error(payload?.error || 'No se pudieron marcar las alertas en Google Sheets.');
+  return payload;
+}

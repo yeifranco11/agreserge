@@ -27,6 +27,7 @@ function doPost(e) {
     if (input.action === 'resetPeriods') return json_(resetPeriods_(input));
     if (input.action === 'lookupPayroll') return json_(lookupPayroll_(input));
     if (input.action === 'certificateTracking') return json_(certificateTracking_(input));
+    if (input.action === 'markCertificateAlerts') return json_(markCertificateAlerts_(input));
     throw new Error('Acción no soportada');
   } catch (error) {
     return json_({ ok: false, error: String(error.message || error) });
@@ -57,8 +58,11 @@ function certificateTracking_(input) {
     const areaIndex = findHeader_(headers, ['AREA', 'ÁREA', 'SERVICIO', 'AREA O SERVICIO', 'ÁREA O SERVICIO', 'CARGO', 'PROCESO']);
     const hospitalIndex = findHeader_(headers, ['HOSPITAL', 'ENTIDAD', 'EMPRESA']);
     const phoneIndex = headers.findIndex(function(h) { return /TELEFONO|TELÉFONO|CELULAR|WHATSAPP/.test(h); });
+    const statusIndex = findHeader_(headers, ['ESTADO (ACTIVO/RETIRADO)', 'ESTADO ACTIVO/RETIRADO', 'ESTADO']);
+    if (statusIndex < 0) return;
     for (let r = headerRow + 1; r < display.length; r++) {
       const row = display[r];
+      if (cleanText_(row[statusIndex]) !== 'ACTIVO') continue;
       const document = digits_(documentIndex >= 0 ? row[documentIndex] : row[1]);
       const name = String(nameIndex >= 0 ? row[nameIndex] : row[2] || '').trim();
       if (!document && !name) continue;
@@ -78,6 +82,48 @@ function certificateTracking_(input) {
     }
   });
   return { ok: true, sourceUpdatedAt: new Date().toISOString(), warningDays: warningDays, affiliates: affiliates };
+}
+
+function markCertificateAlerts_(input) {
+  const warningDays = Math.max(1, Math.min(365, Number(input.days || 60)));
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const book = SpreadsheetApp.openById(CERTIFICATES_SPREADSHEET_ID);
+  let activeRows = 0;
+  let coloredCells = 0;
+  const sheets = [];
+  book.getSheets().forEach(function(sheet) {
+    if (sheet.isSheetHidden() || sheet.getLastRow() < 2) return;
+    const range = sheet.getDataRange();
+    const values = range.getValues();
+    const display = range.getDisplayValues();
+    const existingBackgrounds = range.getBackgrounds();
+    const headerRow = findCertificateHeaderRow_(display);
+    if (headerRow < 0) return;
+    const headers = display[headerRow].map(function(v) { return cleanText_(v); });
+    const statusIndex = findHeader_(headers, ['ESTADO (ACTIVO/RETIRADO)', 'ESTADO ACTIVO/RETIRADO', 'ESTADO']);
+    if (statusIndex < 0 || values.length <= headerRow + 1) return;
+    const backgrounds = [];
+    for (let r = headerRow + 1; r < values.length; r++) {
+      const active = cleanText_(display[r][statusIndex]) === 'ACTIVO';
+      if (active) activeRows++;
+      const rowColors = [];
+      for (let c = 7; c <= 20; c++) {
+        if (!active) { rowColors.push(existingBackgrounds[r][c]); continue; }
+        const result = certificateStatus_(values[r][c], display[r][c], today, warningDays);
+        const color = result.status === 'VENCIDO' || result.status === 'PENDIENTE' ? '#f4cccc'
+          : result.status === 'PROXIMO' ? '#fff2cc'
+          : result.status === 'VIGENTE' ? '#d9ead3' : '#eeeeee';
+        rowColors.push(color);
+        if (result.status !== 'NO_APLICA') coloredCells++;
+      }
+      backgrounds.push(rowColors);
+    }
+    sheet.getRange(headerRow + 2, 8, backgrounds.length, 14).setBackgrounds(backgrounds);
+    sheets.push(sheet.getName());
+  });
+  SpreadsheetApp.flush();
+  return { ok: true, activeRows: activeRows, coloredCells: coloredCells, sheets: sheets, updatedAt: new Date().toISOString() };
 }
 
 function findCertificateHeaderRow_(rows) {
