@@ -1,5 +1,6 @@
 const MASTER_FOLDER_ID = '1L6WrnOjq1ui19SQrzWvSqe5rLHKC-b60';
 const PAYROLL_SPREADSHEET_ID = '11R2hU9IzD55MBa8FivztC38boeQAxGpoMly_3yH0Ajk';
+const CERTIFICATES_SPREADSHEET_ID = '18C_XksYLi9wjhYLsTK_eZtQ2_LnaGrevlsJ4Y8lU7J4';
 
 function doGet() {
   return json_({ ok: true, service: 'AGRESERGE Drive Bridge' });
@@ -17,10 +18,91 @@ function doPost(e) {
     if (input.action === 'createSubreport') return json_(createSubreport_(input));
     if (input.action === 'resetPeriods') return json_(resetPeriods_(input));
     if (input.action === 'lookupPayroll') return json_(lookupPayroll_(input));
+    if (input.action === 'certificateTracking') return json_(certificateTracking_(input));
     throw new Error('Acción no soportada');
   } catch (error) {
     return json_({ ok: false, error: String(error.message || error) });
   }
+}
+
+function certificateTracking_(input) {
+  const warningDays = Math.max(1, Math.min(365, Number(input.days || 60)));
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const book = SpreadsheetApp.openById(CERTIFICATES_SPREADSHEET_ID);
+  const affiliates = [];
+  book.getSheets().forEach(function(sheet) {
+    if (sheet.isSheetHidden() || sheet.getLastRow() < 2) return;
+    const values = sheet.getDataRange().getValues();
+    const display = sheet.getDataRange().getDisplayValues();
+    const headerRow = findCertificateHeaderRow_(display);
+    if (headerRow < 0) return;
+    const headers = display[headerRow].map(function(v) { return cleanText_(v); });
+    const documentIndex = findHeader_(headers, ['CEDULA', 'CÉDULA', 'DOCUMENTO', 'NUMERO DE DOCUMENTO', 'NÚMERO DE DOCUMENTO', 'IDENTIFICACION', 'IDENTIFICACIÓN']);
+    const nameIndex = findHeader_(headers, ['NOMBRE', 'NOMBRES Y APELLIDOS', 'NOMBRE COMPLETO', 'AGREMIADO', 'AFILIADO PARTICIPE', 'AFILIADO PARTÍCIPE']);
+    const areaIndex = findHeader_(headers, ['AREA', 'ÁREA', 'SERVICIO', 'AREA O SERVICIO', 'ÁREA O SERVICIO', 'CARGO', 'PROCESO']);
+    const hospitalIndex = findHeader_(headers, ['HOSPITAL', 'ENTIDAD', 'EMPRESA']);
+    const phoneIndex = headers.findIndex(function(h) { return /TELEFONO|TELÉFONO|CELULAR|WHATSAPP/.test(h); });
+    for (let r = headerRow + 1; r < display.length; r++) {
+      const row = display[r];
+      const document = digits_(documentIndex >= 0 ? row[documentIndex] : row[1]);
+      const name = String(nameIndex >= 0 ? row[nameIndex] : row[2] || '').trim();
+      if (!document && !name) continue;
+      const certificates = [];
+      for (let c = 7; c <= 20; c++) {
+        const course = String(headers[c] || ('CURSO ' + columnName_(c + 1))).trim();
+        const rawDisplay = String(row[c] || '').trim();
+        const result = certificateStatus_(values[r][c], rawDisplay, today, warningDays);
+        certificates.push({ course: course, value: rawDisplay, status: result.status, expiresAt: result.expiresAt, daysRemaining: result.daysRemaining });
+      }
+      affiliates.push({
+        sheet: sheet.getName(), entity: String(hospitalIndex >= 0 ? row[hospitalIndex] : sheet.getName()).trim() || sheet.getName(),
+        document: document, name: name, area: String(areaIndex >= 0 ? row[areaIndex] : '').trim(),
+        phone: digits_(phoneIndex >= 0 ? row[phoneIndex] : row[33]), certificates: certificates
+      });
+    }
+  });
+  return { ok: true, sourceUpdatedAt: new Date().toISOString(), warningDays: warningDays, affiliates: affiliates };
+}
+
+function findCertificateHeaderRow_(rows) {
+  const limit = Math.min(rows.length, 12);
+  for (let r = 0; r < limit; r++) {
+    let courseHeaders = 0;
+    for (let c = 7; c <= 20; c++) if (String(rows[r][c] || '').trim()) courseHeaders++;
+    if (courseHeaders >= 4) return r;
+  }
+  return -1;
+}
+function cleanText_(value) { return String(value || '').trim().toUpperCase().replace(/\s+/g, ' '); }
+function findHeader_(headers, candidates) {
+  for (let i = 0; i < candidates.length; i++) {
+    const target = cleanText_(candidates[i]);
+    const exact = headers.indexOf(target); if (exact >= 0) return exact;
+  }
+  for (let h = 0; h < headers.length; h++) for (let i = 0; i < candidates.length; i++) if (headers[h].indexOf(cleanText_(candidates[i])) >= 0) return h;
+  return -1;
+}
+function digits_(value) { return String(value || '').replace(/\D/g, ''); }
+function columnName_(number) { let name = ''; while (number) { number--; name = String.fromCharCode(65 + number % 26) + name; number = Math.floor(number / 26); } return name; }
+function certificateStatus_(raw, shown, today, warningDays) {
+  const text = cleanText_(shown);
+  if (!text || text === 'NO' || text === 'PENDIENTE') return { status: 'PENDIENTE', expiresAt: null, daysRemaining: null };
+  if (/^(N\/?A|NO APLICA|NO APLICABLE)$/.test(text)) return { status: 'NO_APLICA', expiresAt: null, daysRemaining: null };
+  let date = raw instanceof Date && !isNaN(raw.getTime()) ? new Date(raw.getTime()) : parseCertificateDate_(shown);
+  if (!date) return { status: 'PENDIENTE', expiresAt: null, daysRemaining: null };
+  date.setHours(0, 0, 0, 0);
+  const days = Math.round((date.getTime() - today.getTime()) / 86400000);
+  const iso = Utilities.formatDate(date, Session.getScriptTimeZone() || 'America/Bogota', 'yyyy-MM-dd');
+  return { status: days < 0 ? 'VENCIDO' : days <= warningDays ? 'PROXIMO' : 'VIGENTE', expiresAt: iso, daysRemaining: days };
+}
+function parseCertificateDate_(value) {
+  const text = String(value || '').trim();
+  let match = text.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+  if (!match && /^\d{8}$/.test(text)) match = [text, text.slice(0,2), text.slice(2,4), text.slice(4)];
+  if (!match) return null;
+  const date = new Date(Number(match[3]), Number(match[2]) - 1, Number(match[1]));
+  return date.getFullYear() === Number(match[3]) && date.getMonth() === Number(match[2]) - 1 && date.getDate() === Number(match[1]) ? date : null;
 }
 
 function lookupPayroll_(input) {

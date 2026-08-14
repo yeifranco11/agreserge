@@ -48,6 +48,7 @@ import { driveTemplate } from "../lib/drive-templates";
 import { NominaComprobantes, SolicitudesFirmas } from "./components/operations";
 import { PsychotechnicalScheduling } from "./components/psychotechnical-scheduling";
 import { PsychologyDashboard } from "./components/psychology-dashboard";
+import { CertificateTracking } from "./components/certificate-tracking";
 import {
   documentRequirements,
   healthcareCourseDetails,
@@ -264,6 +265,7 @@ const modulos = [
   "Dashboard gerente",
   "Agendamiento · Pruebas psicotécnicas",
   "Psicología",
+  "Seguimiento de certificados",
   "Parámetros institucionales",
   "Ficha técnica",
   "Cargue documental",
@@ -683,9 +685,17 @@ export default function Page() {
   const onboarding =
     session.rol === "Agremiado" &&
     !isSocioProfileComplete(db.perfiles?.[session.id]);
-  const permitidos = onboarding
+  const basePermitidos = onboarding
     ? ["Ficha técnica"]
     : db.permisos[session.rol] || ["Inicio"];
+  const certificateRoles = new Set([
+    "Administrador de Sistemas", "Coordinación General", "Coordinador General", "Director Ejecutivo", "Gerente",
+    "Talento Humano", "Seguridad y Salud en el Trabajo", "Asesora de Calidad", "Coordinadora Administrativa y Financiera",
+    "Coordinación Administrativa", "Coordinación Asistencial", "Coordinador de Sede", "Coordinación AGRESERGE", "Coordinador de Proceso AGRESERGE",
+  ]);
+  const permitidos = !onboarding && certificateRoles.has(session.rol)
+    ? [...new Set([...basePermitidos, "Seguimiento de certificados"])]
+    : basePermitidos;
   const menu = permitidos.includes(nav)
     ? nav
     : permitidos[0] || "Ficha técnica";
@@ -853,6 +863,7 @@ function Content(p: any) {
   if (nav === "Dashboard gerente") return <Dashboard {...p} />;
   if (nav === "Agendamiento · Pruebas psicotécnicas") return <PsychotechnicalScheduling />;
   if (nav === "Psicología") return <PsychologyDashboard />;
+  if (nav === "Seguimiento de certificados") return <CertificateTracking />;
   if (nav === "Parámetros institucionales") return <Parametros {...p} />;
   if (nav === "Ficha técnica") return <TechnicalProfiles {...p} />;
   if (nav === "Cargue documental") return <Cargue {...p} />;
@@ -3635,6 +3646,7 @@ function Auditoria({ db }: any) {
 function icon(m: string) {
   const props = { size: 17 };
   if (m.includes("Psicología")) return <ClipboardCheck {...props} />;
+  if (m.includes("certificados")) return <ShieldCheck {...props} />;
   if (m.includes("Agendamiento")) return <CalendarDays {...props} />;
   if (m.includes("AGREBOT")) return <Bot {...props} />;
   if (m.includes("Parámetros")) return <Building2 {...props} />;
