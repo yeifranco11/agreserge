@@ -2,6 +2,14 @@ const MASTER_FOLDER_ID = '1L6WrnOjq1ui19SQrzWvSqe5rLHKC-b60';
 const PAYROLL_SPREADSHEET_ID = '11R2hU9IzD55MBa8FivztC38boeQAxGpoMly_3yH0Ajk';
 const CERTIFICATES_SPREADSHEET_ID = '18C_XksYLi9wjhYLsTK_eZtQ2_LnaGrevlsJ4Y8lU7J4';
 const PORTAL_SECRET_HASH = '203c19ebfa2bca227e3f5a450408c7161eca6e9865c8aea7697993fadf22d84f';
+const CERTIFICATE_COURSES = [
+  'PÓLIZA', 'GESTIÓN DEL DUELO', 'CUIDADO DEL DONANTE', 'MANEJO DEL DOLOR',
+  'VÍCTIMAS DE VIOLENCIA SEXUAL', 'ATAQUES CON AGENTES QUÍMICOS',
+  'ADMINISTRACIÓN DE INMUNOBIOLÓGICOS', 'TOMA DE MUESTRA CERVICOUTERINA / GINECOLÓGICA',
+  'SOPORTE VITAL BÁSICO', 'SOPORTE VITAL AVANZADO',
+  'CURSO VIRTUAL CERTIFICADO DE DEFUNCIÓN', 'LICENCIA CATEGORÍA B1',
+  'PRIMEROS AUXILIOS', 'VIGIFLOW'
+];
 
 function doGet() {
   return json_({ ok: true, service: 'AGRESERGE Drive Bridge' });
@@ -56,7 +64,8 @@ function certificateTracking_(input) {
       if (!document && !name) continue;
       const certificates = [];
       for (let c = 7; c <= 20; c++) {
-        const course = String(headers[c] || ('CURSO ' + columnName_(c + 1))).trim();
+        // La fuente oficial define exclusivamente H:U como cursos.
+        const course = CERTIFICATE_COURSES[c - 7];
         const rawDisplay = String(row[c] || '').trim();
         const result = certificateStatus_(values[r][c], rawDisplay, today, warningDays);
         certificates.push({ course: course, value: rawDisplay, status: result.status, expiresAt: result.expiresAt, daysRemaining: result.daysRemaining });
