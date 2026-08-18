@@ -8,6 +8,7 @@ import {
   CalendarDays,
   CheckCircle2,
   ClipboardCheck,
+  ClipboardList,
   Download,
   Eye,
   FilePlus2,
@@ -48,6 +49,7 @@ import { driveTemplate } from "../lib/drive-templates";
 import { NominaComprobantes, SolicitudesFirmas } from "./components/operations";
 import { PsychotechnicalScheduling } from "./components/psychotechnical-scheduling";
 import { PsychologyDashboard } from "./components/psychology-dashboard";
+import { TalentInterviews } from "./components/talent-interviews";
 import { CertificateTracking } from "./components/certificate-tracking";
 import {
   documentRequirements,
@@ -567,6 +569,7 @@ const seed = (): DB => ({
     ],
     "Talento Humano": [
       "Inicio",
+      "Entrevistas de Talento Humano",
       "Parámetros institucionales",
       "Usuarios y claves",
       "Ficha técnica",
@@ -581,6 +584,7 @@ const seed = (): DB => ({
     "Administrador de Sistemas": [
       "Inicio",
       "Psicología",
+      "Entrevistas de Talento Humano",
       "Parámetros institucionales",
       "Nómina y comprobantes",
       "Solicitudes y firmas",
@@ -696,6 +700,9 @@ export default function Page() {
   const permitidos = !onboarding && certificateRoles.has(session.rol)
     ? [...new Set([...basePermitidos, "Seguimiento de certificados"])]
     : basePermitidos;
+  if (!onboarding && ["Talento Humano", "Administrador de Sistemas", "Coordinador General", "Coordinación General"].includes(session.rol)) {
+    permitidos.push(...(!permitidos.includes("Entrevistas de Talento Humano") ? ["Entrevistas de Talento Humano"] : []));
+  }
   const menu = permitidos.includes(nav)
     ? nav
     : permitidos[0] || "Ficha técnica";
@@ -863,6 +870,7 @@ function Content(p: any) {
   if (nav === "Dashboard gerente") return <Dashboard {...p} />;
   if (nav === "Agendamiento · Pruebas psicotécnicas") return <PsychotechnicalScheduling />;
   if (nav === "Psicología") return <PsychologyDashboard />;
+  if (nav === "Entrevistas de Talento Humano") return <TalentInterviews />;
   if (nav === "Seguimiento de certificados") return <CertificateTracking />;
   if (nav === "Parámetros institucionales") return <Parametros {...p} />;
   if (nav === "Ficha técnica") return <TechnicalProfiles {...p} />;
@@ -3646,6 +3654,7 @@ function Auditoria({ db }: any) {
 function icon(m: string) {
   const props = { size: 17 };
   if (m.includes("Psicología")) return <ClipboardCheck {...props} />;
+  if (m.includes("Entrevistas de Talento Humano")) return <ClipboardList {...props} />;
   if (m.includes("certificados")) return <ShieldCheck {...props} />;
   if (m.includes("Agendamiento")) return <CalendarDays {...props} />;
   if (m.includes("AGREBOT")) return <Bot {...props} />;
