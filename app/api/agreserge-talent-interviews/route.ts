@@ -72,20 +72,32 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: "La entrevista solo se habilita después de finalizar la prueba psicológica" }, { status: 409 });
     }
     const responses = cleanResponses(body.responses);
-    const finalize = Boolean(body.finalize);
+    const action = String(body.action || (body.finalize ? "finalize" : "draft"));
+    const existingResult = await supabase.from("agreserge_talent_interviews").select("status,responses,automatic_analysis").eq("assessment_id", assessmentId).maybeSingle();
+    if (existingResult.error) throw existingResult.error;
+    const existing = existingResult.data;
+    const interviewSubmitted = ["ENTREVISTA_ENVIADA", "FINALIZADA"].includes(existing?.status || "");
+    if (action === "submit" && Object.values(responses).filter(Boolean).length < 10) {
+      return NextResponse.json({ error: "Responde toda la entrevista antes de enviarla" }, { status: 400 });
+    }
+    if (action === "finalize" && !interviewSubmitted) {
+      return NextResponse.json({ error: "Primero debes enviar la entrevista; después podrás registrar la conclusión" }, { status: 409 });
+    }
+    const submittedResponses = interviewSubmitted && action === "finalize" ? cleanResponses(existing?.responses) : responses;
+    const status = action === "finalize" ? "FINALIZADA" : action === "submit" ? "ENTREVISTA_ENVIADA" : "BORRADOR";
     const payload = {
       assessment_id: assessmentId,
       affiliate_user_id: assessmentResult.data.user_id,
       interviewer_user_id: interviewer.id,
-      responses,
-      automatic_analysis: buildAnalysis(responses),
-      hr_conclusion: String(body.conclusion || "").trim().slice(0, 8000) || null,
-      status: finalize ? "FINALIZADA" : "BORRADOR",
+      responses: submittedResponses,
+      automatic_analysis: action === "finalize" && existing?.automatic_analysis ? existing.automatic_analysis : buildAnalysis(submittedResponses),
+      hr_conclusion: action === "finalize" ? String(body.conclusion || "").trim().slice(0, 8000) || null : null,
+      status,
       interview_date: String(body.interviewDate || "").trim() || new Date().toISOString().slice(0, 10),
-      completed_at: finalize ? new Date().toISOString() : null,
+      completed_at: action === "finalize" ? new Date().toISOString() : null,
       updated_at: new Date().toISOString(),
     };
-    if (finalize && !payload.hr_conclusion) return NextResponse.json({ error: "Escribe la conclusión de Talento Humano antes de finalizar" }, { status: 400 });
+    if (action === "finalize" && !payload.hr_conclusion) return NextResponse.json({ error: "Escribe la conclusión de Talento Humano antes de finalizar" }, { status: 400 });
     const result = await supabase.from("agreserge_talent_interviews").upsert(payload, { onConflict: "assessment_id" }).select("*").single();
     if (result.error) throw result.error;
     return NextResponse.json({ ok: true, interview: result.data });
