@@ -167,7 +167,7 @@ async function uploadReportFile(id: string, file: File) {
     body: JSON.stringify({ action: "finalize", path: prepared.path, ...metadata }),
   });
   const finalized = await readJson(finalizeResponse);
-  if (!finalizeResponse.ok) throw new Error(finalized.error || "No se pudo copiar el archivo a Drive.");
+  if (!finalizeResponse.ok) throw new Error(finalized.error || "No se pudo guardar el archivo en el portal.");
   return finalized;
 }
 type Documento = {
@@ -1996,20 +1996,6 @@ function Informes({ db, session }: any) {
       setLoading(false);
     }
   };
-  const upload = async (id: string, file?: File) => {
-    if (!file) return;
-    setLoading(true);
-    try {
-      await uploadReportFile(id, file);
-      await load();
-      alert("Informe guardado correctamente en su carpeta de Google Drive.");
-    } catch (e: any) {
-      setError(e.message || "No se pudo cargar el informe");
-      alert(e.message || "No se pudo cargar el informe");
-    } finally {
-      setLoading(false);
-    }
-  };
   const uploadMany = async (id: string, files?: FileList | null) => {
     if (!files?.length) return;
     setLoading(true);
@@ -2077,8 +2063,8 @@ function Informes({ db, session }: any) {
           <h2>Informes de actividades</h2>
           <p className="muted">
             {crossHospitalAccess
-              ? "Acceso institucional AGRESERGE: consulte y cargue informes de todos los hospitales con mes abierto."
-              : `Aquí aparecen exclusivamente los anexos y subinformes asignados a ${session.nombre}.`}
+              ? "Acceso institucional AGRESERGE: cargue directamente los informes de todos los hospitales con mes abierto."
+              : `Cargue directamente los anexos y subinformes asignados a ${session.nombre}.`}
           </p>
         </div>
         <span className={`pill ${error ? "bad" : "ok"}`}>{error || (loading ? "Sincronizando…" : `${visibleSubmissions.length} asignaciones activas`)}</span>
@@ -2113,21 +2099,14 @@ function Informes({ db, session }: any) {
                     {period?.entity?.nombre || "Hospital"} · Obligación {item.obligation?.numero || "—"} · {period?.mes || "Periodo"} {period?.anio || ""}
                     {" · "}{item.estado}
                   </span>
-                  {item.drive_file_url && (
-                    <div className="row">
-                      <button className="btn" onClick={() => setPreview(item)}><Eye size={14} /> Previsualizar cargue</button>
-                      <a href={item.drive_file_url} target="_blank" rel="noreferrer" className="link">
-                        <LinkIcon size={14} /> Abrir documento
-                      </a>
-                    </div>
-                  )}
                   {!!item.files?.length && (
                     <div className="reportFileList">
                       {item.files.map((file: any, index: number) => (
                         <button className="btn" key={file.id} onClick={() => setPreview({
                           ...item,
                           archivo_nombre: file.nombre,
-                          drive_file_url: file.drive_file_url,
+                          archivo_tipo: file.mime_type,
+                          url: file.url,
                         })}>
                           <Eye size={13} /> {index + 1}. {file.nombre}
                         </button>
@@ -2135,11 +2114,6 @@ function Informes({ db, session }: any) {
                     </div>
                   )}
                   {item.observacion && <p className="obsBox">{item.observacion}</p>}
-                  {item.drive_folder_url && (
-                    <a href={item.drive_folder_url} target="_blank" rel="noreferrer" className="link">
-                      <FolderKanban size={14} /> Abrir carpeta del anexo
-                    </a>
-                  )}
                 </div>
                 <label className="reportUpload">
                   <span>{["Aprobado", "Con observación"].includes(item.estado) ? "Soporte revisado y bloqueado" : "Cargar uno o varios archivos"}</span>
@@ -2276,7 +2250,16 @@ function Informes({ db, session }: any) {
         <div className="previewOverlay" onClick={() => setPreview(null)}>
           <div className="previewModal" onClick={(event) => event.stopPropagation()}>
             <div className="sectionTitleRow"><div><span className="badge">VISTA PREVIA</span><h3>{preview.archivo_nombre || preview.titulo}</h3></div><button className="btn" onClick={() => setPreview(null)}>Cerrar</button></div>
-            <iframe className="documentFrame" title="Documento del informe" src={drivePreviewUrl(preview.drive_file_url)} />
+            {preview.url && (preview.archivo_tipo === "application/pdf" || preview.archivo_tipo?.startsWith("image/")) ? (
+              <iframe className="documentFrame" title="Documento del informe" src={preview.url} />
+            ) : (
+              <div className="emptyState">
+                <FileText size={42} />
+                <b>Este tipo de archivo se abre en su aplicación correspondiente</b>
+                <span>Word y Excel no se previsualizan directamente en todos los navegadores.</span>
+                {preview.url && <a className="btn primary" href={preview.url} target="_blank" rel="noreferrer">Abrir o descargar archivo</a>}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -2466,6 +2449,7 @@ function InformesLegacy({ db, save, session }: any) {
 }
 function AsignacionMensual({ db, session }: any) {
   const [data, setData] = useState<any>({ periods: [], obligations: [], annexes: [], submissions: [] });
+  const [preview, setPreview] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [form, setForm] = useState({ entidadId: "hgc", mes: meses[new Date().getMonth()], anio: String(new Date().getFullYear()), fechaLimite: "" });
@@ -2544,14 +2528,12 @@ function AsignacionMensual({ db, session }: any) {
   };
   const open = async () => {
     if (!form.mes || !form.anio) return alert("Seleccione mes y año.");
-    const payload = await action({ action: "open-period", ...form });
-    if (payload?.folderUrl) window.open(payload.folderUrl, "_blank", "noopener,noreferrer");
+    await action({ action: "open-period", ...form }, "Mes abierto. Los responsables ya pueden cargar sus informes directamente.");
   };
   const close = async (periodId: string) => {
-    if (!confirm("¿Cerrar el mes y generar el informe consolidado editable?")) return;
+    if (!confirm("¿Cerrar el mes y generar el consolidado ordenado de todos los archivos?")) return;
     const payload = await action({ action: "close-period", periodId });
-    if (payload?.pdfFolderUrl) window.open(payload.pdfFolderUrl, "_blank", "noopener,noreferrer");
-    else if (payload?.url) window.open(payload.url, "_blank", "noopener,noreferrer");
+    if (payload?.url) window.open(payload.url, "_blank", "noopener,noreferrer");
   };
   const cancel = async (period: any) => {
     if (!confirm(
@@ -2563,20 +2545,19 @@ function AsignacionMensual({ db, session }: any) {
     );
   };
   const syncPeriod = async (periodId: string) => {
-    const payload = await action(
+    await action(
       { action: "sync-period", periodId },
-      "Periodo sincronizado. Los responsables ya pueden ver, editar y cargar sus informes.",
+      "Periodo sincronizado. Los responsables ya pueden cargar sus informes directamente.",
     );
-    if (payload?.folderUrl) window.open(payload.folderUrl, "_blank", "noopener,noreferrer");
   };
-  const upload = async (id: string, file?: File) => {
-    if (!file) return;
+  const uploadMany = async (id: string, files?: FileList | null) => {
+    if (!files?.length) return;
     setLoading(true);
     setError("");
     try {
-      await uploadReportFile(id, file);
+      for (const file of Array.from(files)) await uploadReportFile(id, file);
       await load();
-      alert("Informe cargado y guardado en la carpeta correcta de Google Drive.");
+      alert(`${files.length} archivo${files.length === 1 ? "" : "s"} guardado${files.length === 1 ? "" : "s"} correctamente en el portal.`);
     } catch (e: any) {
       setError(e.message || "No se pudo cargar el archivo");
       alert(e.message || "No se pudo cargar el archivo");
@@ -2584,7 +2565,8 @@ function AsignacionMensual({ db, session }: any) {
       setLoading(false);
     }
   };
-  const selectedPeriod = data.periods.find((period: any) => period.entidad_id === form.entidadId);
+  const selectedPeriod = data.periods.find((period: any) => period.entidad_id === form.entidadId && period.estado !== "Cerrado") ||
+    data.periods.find((period: any) => period.entidad_id === form.entidadId);
   const visibleSubmissions = selectedPeriod
     ? data.submissions.filter((item: any) => item.period_id === selectedPeriod.id)
     : data.submissions;
@@ -2604,7 +2586,7 @@ function AsignacionMensual({ db, session }: any) {
         <div>
           <span className="badge">INFORMES MENSUALES POR HOSPITAL</span>
           <h2>Centro de ejecución contractual</h2>
-          <p className="muted">24 obligaciones, 27 anexos, delegación por líder, orden controlado, carpetas de Drive y cierre consolidado editable.</p>
+          <p className="muted">Carga directa protegida, delegación por líder, orden controlado y cierre consolidado por entidad, obligación y anexo.</p>
         </div>
         <span className={`pill ${error ? "bad" : "ok"}`}>{error || (loading ? "Sincronizando…" : "Base de informes conectada")}</span>
       </div>
@@ -2623,7 +2605,7 @@ function AsignacionMensual({ db, session }: any) {
           </div>
           <div className="row">
             <button className="btn" disabled={loading} onClick={bootstrap}>Parametrizar entidad seleccionada</button>
-            <button className="btn primary" disabled={loading} onClick={open}>Abrir mes y crear carpetas</button>
+            <button className="btn primary" disabled={loading} onClick={open}>Abrir mes y asignar informes</button>
             <button className="btn danger" disabled={loading} onClick={reset}>Reiniciar meses abiertos</button>
           </div>
         </div>
@@ -2728,19 +2710,18 @@ function AsignacionMensual({ db, session }: any) {
               <span>{period.mes} {period.anio}</span>
               <span className={`pill ${period.estado === "Cerrado" ? "ok" : "warn"}`}>{period.estado}</span>
               <div className="row">
-                {period.drive_folder_url && <a className="btn" href={period.drive_folder_url} target="_blank">Carpeta Drive</a>}
                 {period.estado !== "Cerrado" && isManager && (
                   <button className="btn" disabled={loading} onClick={() => syncPeriod(period.id)}>
                     Sincronizar responsables
                   </button>
                 )}
-                {period.estado !== "Cerrado" && isManager && <button className="btn primary" onClick={() => close(period.id)}>Cerrar y consolidar</button>}
+                {period.estado !== "Cerrado" && isManager && <button className="btn primary" onClick={() => close(period.id)}>Cerrar y consolidar archivos</button>}
                 {period.estado !== "Cerrado" && isManager && (
                   <button className="btn danger" disabled={loading} onClick={() => cancel(period)}>
                     Cancelar apertura
                   </button>
                 )}
-                {period.consolidated_doc_url && <a className="btn primary" href={period.consolidated_doc_url} target="_blank">Informe editable</a>}
+                {period.consolidated_doc_url && <a className="btn primary" href={period.consolidated_doc_url} target="_blank">Descargar consolidado ordenado</a>}
               </div>
             </div>
           ))}
@@ -2760,11 +2741,24 @@ function AsignacionMensual({ db, session }: any) {
                 <div className="assignmentInfo">
                   <b>{item.titulo}</b>
                   <span>{responsible?.nombre || "Sin responsable"} · {item.estado}</span>
-                  {item.drive_file_url && <a href={item.drive_file_url} target="_blank" className="link">Abrir y diligenciar en Drive</a>}
+                  {!!item.files?.length && (
+                    <div className="reportFileList">
+                      {item.files.map((file: any, index: number) => (
+                        <button className="btn" key={file.id} onClick={() => setPreview({
+                          titulo: item.titulo,
+                          archivo_nombre: file.nombre,
+                          archivo_tipo: file.mime_type,
+                          url: file.url,
+                        })}>
+                          <Eye size={13} /> {index + 1}. {file.nombre}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   {(item.responsable_id === session.id || isManager) && (
                     <label className="reportUpload">
-                      <span>Cargar PDF, Word, Excel o imagen</span>
-                      <input type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png" onChange={(e) => upload(item.id, e.target.files?.[0])} />
+                      <span>Cargar directamente uno o varios informes</span>
+                      <input type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png" onChange={(e) => uploadMany(item.id, e.target.files)} />
                     </label>
                   )}
                 </div>
@@ -2772,7 +2766,7 @@ function AsignacionMensual({ db, session }: any) {
                   <div className="assignmentActions">
                     <select value={item.responsable_id || ""} onChange={(e) => action({ action: "delegate", id: item.id, responsableId: e.target.value })}>
                       <option value="">Asignar responsable</option>
-                      {db.usuarios.filter((user: Usuario) => user.activo && user.entidadId === "hgc").map((user: Usuario) => <option key={user.id} value={user.id}>{user.nombre}</option>)}
+                      {assignableUsers.map((user: Usuario) => <option key={user.id} value={user.id}>{user.nombre}</option>)}
                     </select>
                     <input className="input orderInput" type="number" value={item.orden} onChange={(e) => action({ action: "reorder", id: item.id, orden: e.target.value })} aria-label="Orden" />
                   </div>
@@ -2783,6 +2777,23 @@ function AsignacionMensual({ db, session }: any) {
           {!visibleSubmissions.length && <p className="muted">Todavía no hay anexos asignados para este periodo.</p>}
         </div>
       </div>
+      {preview && (
+        <div className="previewOverlay" onClick={() => setPreview(null)}>
+          <div className="previewModal" onClick={(event) => event.stopPropagation()}>
+            <div className="sectionTitleRow"><div><span className="badge">VISTA PREVIA</span><h3>{preview.archivo_nombre || preview.titulo}</h3></div><button className="btn" onClick={() => setPreview(null)}>Cerrar</button></div>
+            {preview.url && (preview.archivo_tipo === "application/pdf" || preview.archivo_tipo?.startsWith("image/")) ? (
+              <iframe className="documentFrame" title="Documento del informe" src={preview.url} />
+            ) : (
+              <div className="emptyState">
+                <FileText size={42} />
+                <b>Este tipo de archivo se abre en su aplicación correspondiente</b>
+                <span>Word y Excel no se previsualizan directamente en todos los navegadores.</span>
+                {preview.url && <a className="btn primary" href={preview.url} target="_blank" rel="noreferrer">Abrir o descargar archivo</a>}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2856,12 +2867,12 @@ function AsignacionMensualLegacy({ db, save, session }: any) {
             responsableId: b.responsableId,
           })),
       });
-      setCarpetaMes(payload.folderUrl || "");
+      setCarpetaMes("");
       if (payload.db)
-        save(payload.db, `Periodo de Drive creado: ${f.mes} ${f.anio}`);
-      alert(`Periodo ${f.mes} ${f.anio} creado correctamente en Google Drive.`);
+        save(payload.db, `Periodo de informes creado: ${f.mes} ${f.anio}`);
+      alert(`Periodo ${f.mes} ${f.anio} creado correctamente.`);
     } catch (e: any) {
-      alert(e.message || "No se pudo crear el periodo en Drive");
+      alert(e.message || "No se pudo crear el periodo de informes");
     } finally {
       setGenerando(false);
     }
@@ -2916,17 +2927,8 @@ function AsignacionMensualLegacy({ db, save, session }: any) {
             </select>
           </div>
           <div className="span6 field">
-            <label>Formato maestro en Drive</label>
-            <input
-              className="input"
-              readOnly
-              value={
-                f.anexo
-                  ? driveTemplate(Number(f.anexo))?.url ||
-                    "Formato no disponible"
-                  : "Seleccione un formato del 1 al 24"
-              }
-            />
+            <label>Modalidad de entrega</label>
+            <input className="input" readOnly value="Carga directa en el portal" />
           </div>
         </div>
         <button className="btn primary" onClick={crearBase}>
@@ -2962,9 +2964,7 @@ function AsignacionMensualLegacy({ db, save, session }: any) {
             disabled={generando}
             onClick={generarMes}
           >
-            {generando
-              ? "Creando copias en Drive..."
-              : "Crear mes y duplicar formatos"}
+            {generando ? "Creando periodo..." : "Crear periodo de informes"}
           </button>
           <button className="btn" onClick={notificar}>
             <Mail size={14} /> Simular correo día 14
@@ -2973,16 +2973,9 @@ function AsignacionMensualLegacy({ db, save, session }: any) {
             <Download size={14} /> Generar informe final CSV
           </button>
         </div>
-        {carpetaMes && (
-          <p>
-            <a className="link" href={carpetaMes} target="_blank">
-              Abrir carpeta mensual en Google Drive
-            </a>
-          </p>
-        )}
         <p className="muted">
-          <Mail size={14} /> El link de apertura del informe queda funcional
-          como enlace; la copia mensual queda lista por anexo y responsable.
+          <Mail size={14} /> Cada responsable carga directamente sus archivos
+          en el portal y el cierre respeta el orden configurado.
         </p>
       </div>
       <div className="card span12">
@@ -2994,20 +2987,7 @@ function AsignacionMensualLegacy({ db, save, session }: any) {
                 <td>Anexo {a.anexo}</td>
                 <td>{a.titulo}</td>
                 <td>{usuarioNombre(db, a.responsableId)}</td>
-                <td>
-                  <a className="link" href={a.plantillaGoogle} target="_blank">
-                    Google Docs
-                  </a>
-                </td>
-                <td>
-                  <a
-                    className="link"
-                    href={a.hojaGoogle || f.hojaGoogle}
-                    target="_blank"
-                  >
-                    Google Sheets
-                  </a>
-                </td>
+                <td>Carga directa</td>
               </tr>
             ))}
           </tbody>
