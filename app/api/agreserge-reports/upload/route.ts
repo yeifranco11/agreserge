@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { getSessionUserId } from "../../../../lib/agreserge-auth";
 import { loadDB } from "../../../../lib/agreserge-db";
 import { hasCrossHospitalReportAccess } from "../../../../lib/agreserge-report-access";
-import { importReportFromUrl } from "../../../../lib/apps-script-drive";
 import { requireSupabaseAdmin } from "../../../../lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
@@ -91,17 +90,9 @@ export async function POST(request: Request) {
     const path = String(input.path || "");
     if (!path.startsWith(`reports/${submission.data.period_id}/${id}/`))
       return NextResponse.json({ error: "Ruta de archivo inválida" }, { status: 400 });
-    const signedDownload = await supabase.storage.from("agreserge-files").createSignedUrl(path, 15 * 60);
-    if (signedDownload.error) throw signedDownload.error;
-    const drive = await importReportFromUrl({
-      folderId: submission.data.drive_folder_id,
-      fileUrl: signedDownload.data.signedUrl,
-      fileName,
-      mimeType: fileType,
-    });
     const update = await supabase.from("agreserge_report_submissions").update({
       estado: "Cargado", archivo_path: path, archivo_nombre: fileName, archivo_tipo: fileType,
-      drive_file_id: drive.id, drive_file_url: drive.url, submitted_at: new Date().toISOString(),
+      submitted_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }).eq("id", id);
     if (update.error) throw update.error;
@@ -113,13 +104,17 @@ export async function POST(request: Request) {
         storage_path: path,
         nombre: fileName,
         mime_type: fileType,
-        drive_file_id: drive.id,
-        drive_file_url: drive.url,
       },
     }).select("*").single();
     if (fileRow.error) throw fileRow.error;
-    return NextResponse.json({ ok: true, url: drive.url, file: fileRow.data.metadata });
+    const signedDownload = await supabase.storage.from("agreserge-files").createSignedUrl(path, 30 * 60);
+    if (signedDownload.error) throw signedDownload.error;
+    return NextResponse.json({ ok: true, url: signedDownload.data.signedUrl, file: { ...fileRow.data.metadata, url: signedDownload.data.signedUrl } });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || "No se pudo cargar el informe" }, { status: 500 });
+    const raw = error.message || "No se pudo cargar el informe";
+    const message = /DriveApp|UrlFetchApp|googleapis|permission to call/i.test(raw)
+      ? "El archivo no pudo almacenarse. Intente nuevamente desde el portal."
+      : raw;
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

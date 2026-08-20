@@ -4,7 +4,6 @@ import { getSessionUserId, hashPassword } from "../../../lib/agreserge-auth";
 import { loadDB } from "../../../lib/agreserge-db";
 import { canAdmin } from "../../../lib/agreserge-permissions";
 import { hasCrossHospitalReportAccess } from "../../../lib/agreserge-report-access";
-import { consolidateDrivePeriod, createDriveSubreport, openDrivePeriod, resetDrivePeriods } from "../../../lib/apps-script-drive";
 import {
   HGC_ADMIN_LEADERS,
   HGC_ASSISTANCE_LEADERS,
@@ -14,6 +13,7 @@ import {
 } from "../../../lib/hgc-report-config";
 import { reportConfigFor } from "../../../lib/hospital-report-config";
 import { requireSupabaseAdmin } from "../../../lib/supabase-admin";
+import { createZip } from "../../../lib/zip-archive";
 
 export const dynamic = "force-dynamic";
 
@@ -57,7 +57,9 @@ async function syncPeriodStructure({
   const assignments = (annexResult.data || []).map((annex: any) => {
     const obligation = (obligationsResult.data || []).find((item: any) => item.id === annex.obligation_id);
     const responsible = users.find((item: any) => item.id === annex.responsable_id) || actor;
-    const subSource = annex.numero === 1 ? HGC_ADMIN_LEADERS : annex.numero === 3 ? HGC_ASSISTANCE_LEADERS : [];
+    const subSource = period.entidad_id === HGC_ENTITY_ID
+      ? (annex.numero === 1 ? HGC_ADMIN_LEADERS : annex.numero === 3 ? HGC_ASSISTANCE_LEADERS : [])
+      : [];
     const subinformes = subSource.map(([nombre, titulo], index) => {
       const user = users.find((item: any) => slug(item.nombre) === slug(nombre));
       return {
@@ -80,26 +82,13 @@ async function syncPeriodStructure({
       subinformes,
     };
   });
-  const drive = await openDrivePeriod({
-    hospital: entity.nombre,
-    mes: period.mes,
-    anio: String(period.anio),
-    obligations: (obligationsResult.data || []).map((obligation: any) => ({
-      obligacion: obligation.numero,
-      titulo: obligation.titulo,
-    })),
-    assignments,
-  });
   const existingResult = await supabase.from("agreserge_report_submissions")
     .select("*").eq("period_id", period.id).order("orden");
   if (existingResult.error) throw existingResult.error;
   const existing = existingResult.data || [];
   let created = 0;
   let updated = 0;
-  for (let index = 0; index < drive.items.length; index += 1) {
-    const item = drive.items[index];
-    const source = assignments[index];
-    if (!source) continue;
+  for (const source of assignments) {
     let parent = existing.find((row: any) => row.annex_id === source.annex.id && !row.parent_id);
     const parentValues: any = {
       period_id: period.id,
@@ -110,14 +99,8 @@ async function syncPeriodStructure({
       titulo: source.titulo,
       orden: source.obligacionOrden * 1000 + source.anexoOrden * 100,
       estado: parent?.estado || "Asignado",
-      drive_folder_id: item.folderId,
-      drive_folder_url: item.folderUrl,
       updated_at: new Date().toISOString(),
     };
-    if (!parent?.archivo_path) {
-      parentValues.drive_file_id = item.id;
-      parentValues.drive_file_url = item.url;
-    }
     if (parent) {
       const result = await supabase.from("agreserge_report_submissions")
         .update(parentValues).eq("id", parent.id).select("*").single();
@@ -132,13 +115,12 @@ async function syncPeriodStructure({
       existing.push(parent);
       created += 1;
     }
-    const subitems = item.subitems || [];
-    for (let subIndex = 0; subIndex < subitems.length; subIndex += 1) {
-      const sub = subitems[subIndex];
+    for (let subIndex = 0; subIndex < source.subinformes.length; subIndex += 1) {
+      const sub = source.subinformes[subIndex];
       const subOrder = source.obligacionOrden * 1000 + source.anexoOrden * 100 + Number(sub.orden || subIndex + 1);
       let child = existing.find((row: any) =>
         row.parent_id === parent.id &&
-        (row.drive_folder_id === sub.folderId || row.drive_file_id === sub.id || row.orden === subOrder));
+        (row.orden === subOrder || row.titulo === sub.titulo));
       const childValues: any = {
         period_id: period.id,
         obligation_id: source.obligation.id,
@@ -146,17 +128,11 @@ async function syncPeriodStructure({
         parent_id: parent.id,
         responsable_id: sub.responsableId,
         delegado_por_id: source.responsableId,
-        titulo: sub.nombre,
+        titulo: sub.titulo,
         orden: subOrder,
         estado: child?.estado || "Asignado",
-        drive_folder_id: sub.folderId || item.folderId,
-        drive_folder_url: sub.folderUrl || item.folderUrl,
         updated_at: new Date().toISOString(),
       };
-      if (!child?.archivo_path) {
-        childValues.drive_file_id = sub.id;
-        childValues.drive_file_url = sub.url;
-      }
       if (child) {
         const result = await supabase.from("agreserge_report_submissions")
           .update(childValues).eq("id", child.id).select("*").single();
@@ -174,8 +150,6 @@ async function syncPeriodStructure({
     }
   }
   return {
-    folderId: drive.folderId,
-    folderUrl: drive.folderUrl,
     created,
     updated,
     total: created + updated,
@@ -208,7 +182,13 @@ export async function GET(request: Request) {
     for (const result of [periods, obligations, annexes, submissionRows, reportFiles]) if (result.error) throw result.error;
     const filesBySubmission = new Map<string, any[]>();
     for (const audit of reportFiles.data || []) {
-      const file = { id: audit.id, uploaded_by: audit.usuario_id, created_at: audit.created_at, ...(audit.metadata || {}) };
+      const metadata = audit.metadata || {};
+      let url = "";
+      if (metadata.storage_path) {
+        const signed = await supabase.storage.from("agreserge-files").createSignedUrl(metadata.storage_path, 30 * 60);
+        if (!signed.error) url = signed.data.signedUrl;
+      }
+      const file = { id: audit.id, uploaded_by: audit.usuario_id, created_at: audit.created_at, ...metadata, url };
       const list = filesBySubmission.get(file.submission_id) || [];
       list.push(file);
       filesBySubmission.set(file.submission_id, list);
@@ -472,12 +452,10 @@ export async function POST(request: Request) {
       const result = await supabase.from("agreserge_report_periods")
         .delete().eq("entidad_id", entidadId).select("id");
       if (result.error) throw result.error;
-      const drive = await resetDrivePeriods();
       return NextResponse.json({
         ok: true,
         deletedPeriods: result.data?.length || 0,
         deletedAssignments,
-        archivedDriveFolders: drive.archived || 0,
       });
     }
 
@@ -494,12 +472,6 @@ export async function POST(request: Request) {
         actor,
         period: periodResult.data,
       });
-      const periodUpdate = await supabase.from("agreserge_report_periods").update({
-        drive_folder_id: synced.folderId,
-        drive_folder_url: synced.folderUrl,
-        updated_at: new Date().toISOString(),
-      }).eq("id", periodResult.data.id);
-      if (periodUpdate.error) throw periodUpdate.error;
       return NextResponse.json({ ok: true, ...synced });
     }
 
@@ -519,16 +491,9 @@ export async function POST(request: Request) {
           actor,
           period: { ...periodResult.data, entity },
         });
-        const periodUpdate = await supabase.from("agreserge_report_periods").update({
-          drive_folder_id: synced.folderId,
-          drive_folder_url: synced.folderUrl,
-          updated_at: new Date().toISOString(),
-        }).eq("id", periodId);
-        if (periodUpdate.error) throw periodUpdate.error;
         return NextResponse.json({
           ok: true,
           periodId,
-          folderUrl: synced.folderUrl,
           assignments: synced.total,
         });
       } catch (error) {
@@ -567,8 +532,6 @@ export async function POST(request: Request) {
           entidad: period.data.entity?.nombre,
           mes: period.data.mes,
           anio: period.data.anio,
-          drive_folder_id: period.data.drive_folder_id,
-          drive_folder_url: period.data.drive_folder_url,
         },
       });
       if (audit.error) throw audit.error;
@@ -617,12 +580,6 @@ export async function POST(request: Request) {
       const order = Number.isFinite(requestedOrder) && requestedOrder > 0
         ? Math.trunc(requestedOrder)
         : Math.max(1, Number(siblings.data?.[0]?.orden || parent.data.orden) + 1);
-      const drive = await createDriveSubreport({
-        folderId: parent.data.drive_folder_id,
-        title,
-        responsibleName: responsible.nombre,
-        order,
-      });
       const inserted = await supabase.from("agreserge_report_submissions").insert({
         id: randomUUID(),
         period_id: parent.data.period_id,
@@ -634,10 +591,6 @@ export async function POST(request: Request) {
         titulo: title,
         orden: order,
         estado: "Asignado",
-        drive_folder_id: drive.folderId,
-        drive_folder_url: drive.folderUrl,
-        drive_file_id: drive.id,
-        drive_file_url: drive.url,
         updated_at: new Date().toISOString(),
       }).select("*").single();
       if (inserted.error) throw inserted.error;
@@ -686,37 +639,53 @@ export async function POST(request: Request) {
       const filesFor = (submissionId: string) => (reportFileRows.data || [])
         .map((row: any) => row.metadata || {})
         .filter((file: any) => file.submission_id === submissionId);
-      const items = (submissions.data || []).filter((item: any) => !item.parent_id).map((item: any) => ({
-        obligacion: item.obligation.numero, obligacionTitulo: item.obligation.titulo,
-        anexo: item.annex?.numero ?? null, titulo: item.titulo, orden: item.orden,
-        url: item.drive_file_url || item.archivo_path,
-        urls: filesFor(item.id).map((file: any) => ({ nombre: file.nombre, url: file.drive_file_url })),
-        responsableNombre: db.usuarios.find((u: any) => u.id === item.responsable_id)?.nombre,
-        subitems: (submissions.data || []).filter((sub: any) => sub.parent_id === item.id).map((sub: any) => ({
-          titulo: sub.titulo, orden: sub.orden, url: sub.drive_file_url,
-          urls: filesFor(sub.id).map((file: any) => ({ nombre: file.nombre, url: file.drive_file_url })),
-          responsableNombre: db.usuarios.find((u: any) => u.id === sub.responsable_id)?.nombre,
-        })),
-      }));
-      const drive = await consolidateDrivePeriod({
-        hospital: periodResult.data.entity.nombre, mes: periodResult.data.mes,
-        anio: String(periodResult.data.anio), items,
+      const safe = (value: any) => String(value || "SIN-NOMBRE")
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
+      const entries: Array<{ name: string; data: Buffer }> = [];
+      const indexRows = ["ORDEN,OBLIGACION,ANEXO,TIPO,RESPONSABLE,ARCHIVO"];
+      for (const item of submissions.data || []) {
+        const obligation = String(item.obligation?.numero || 0).padStart(2, "0");
+        const annex = String(item.annex?.numero ?? 0).padStart(2, "0");
+        const kind = item.parent_id ? "SUBINFORME" : "ANEXO";
+        const responsible = db.usuarios.find((u: any) => u.id === item.responsable_id)?.nombre || "Sin responsable";
+        const base = `${obligation}-OBLIGACION-${obligation}/${annex}-ANEXO-${annex}/${String(item.orden).padStart(5, "0")}-${kind}-${safe(item.titulo)}`;
+        for (const [fileIndex, file] of filesFor(item.id).entries()) {
+          if (!file.storage_path) continue;
+          const downloaded = await supabase.storage.from("agreserge-files").download(file.storage_path);
+          if (downloaded.error) throw downloaded.error;
+          const name = `${base}/${String(fileIndex + 1).padStart(2, "0")}-${safe(file.nombre)}`;
+          entries.push({ name, data: Buffer.from(await downloaded.data.arrayBuffer()) });
+          indexRows.push([item.orden, item.obligation?.numero, item.annex?.numero ?? 0, kind, `"${responsible.replace(/"/g, '""')}"`, `"${String(file.nombre).replace(/"/g, '""')}"`].join(","));
+        }
+      }
+      if (!entries.length) return NextResponse.json({ error: "No hay informes cargados para consolidar" }, { status: 400 });
+      entries.unshift({ name: "00-INDICE-DE-INFORMES.csv", data: Buffer.from(indexRows.join("\n"), "utf8") });
+      const archive = createZip(entries);
+      const archiveName = `INFORME-${safe(periodResult.data.entity.nombre)}-${safe(periodResult.data.mes)}-${periodResult.data.anio}.zip`;
+      const archivePath = `reports/${input.periodId}/consolidated/${archiveName}`;
+      const uploaded = await supabase.storage.from("agreserge-files").upload(archivePath, archive, {
+        contentType: "application/zip", upsert: true,
       });
+      if (uploaded.error) throw uploaded.error;
+      const downloadUrl = `/api/agreserge-reports/consolidated?periodId=${encodeURIComponent(input.periodId)}`;
       const update = await supabase.from("agreserge_report_periods").update({
         estado: "Cerrado", closed_at: new Date().toISOString(),
-        consolidated_doc_id: drive.id, consolidated_doc_url: drive.url, updated_at: new Date().toISOString(),
+        consolidated_doc_id: archivePath, consolidated_doc_url: downloadUrl, updated_at: new Date().toISOString(),
       }).eq("id", input.periodId);
       if (update.error) throw update.error;
       return NextResponse.json({
         ok: true,
-        url: drive.url,
-        wordUrl: drive.wordUrl,
-        pdfFolderUrl: drive.pdfFolderUrl,
+        url: downloadUrl,
       });
     }
 
     return NextResponse.json({ error: "Acción no soportada" }, { status: 400 });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || "No se pudo procesar el informe" }, { status: 500 });
+    const raw = error.message || "No se pudo procesar el informe";
+    const message = /DriveApp|UrlFetchApp|googleapis|permission to call/i.test(raw)
+      ? "El servicio externo de archivos no está disponible. Puede continuar usando la carga directa del portal."
+      : raw;
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

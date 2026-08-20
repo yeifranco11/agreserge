@@ -96,7 +96,7 @@ export async function openRemoteDrivePeriod(input: {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok)
     throw new Error(
-      payload?.error ?? "No se pudo crear el periodo en Google Drive",
+      payload?.error ?? "No se pudo crear el periodo de informes",
     );
   return payload;
 }
