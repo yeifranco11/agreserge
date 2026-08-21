@@ -193,13 +193,16 @@ export async function GET(request: Request) {
       list.push(file);
       filesBySubmission.set(file.submission_id, list);
     }
+    const assignedPeriodIds = new Set((submissionRows.data || []).map((submission: any) => submission.period_id));
+    const restrictPeriodsToAssignments = !crossHospitalAccess && !superManager;
     const visiblePeriods = (periods.data || []).filter((period: any) =>
       (!mineOnly || period.estado !== "Cerrado") &&
-      (!requestedEntityId || period.entidad_id === requestedEntityId),
+      (!requestedEntityId || period.entidad_id === requestedEntityId) &&
+      (!restrictPeriodsToAssignments || assignedPeriodIds.has(period.id)),
     );
     const visiblePeriodIds = new Set(visiblePeriods.map((period: any) => period.id));
     const visibleSubmissions = (submissionRows.data || []).filter((submission: any) =>
-      (!mineOnly && !requestedEntityId) || visiblePeriodIds.has(submission.period_id),
+      visiblePeriodIds.has(submission.period_id),
     );
     return NextResponse.json({
       periods: visiblePeriods,
@@ -343,6 +346,18 @@ export async function POST(request: Request) {
         ...HGC_ADMIN_LEADERS.map(([nombre, area], index) => ({ nombre, area, group: "administrativo", index })),
         ...HGC_ASSISTANCE_LEADERS.map(([nombre, area], index) => ({ nombre, area, group: "asistencial", index })),
       ] : [];
+      const areaIdFor = (area: string) => `${entityId}-area-${slug(area)}`;
+      const uniqueAreas = Array.from(new Map(leaders.map((leader) => [leader.area, leader])).values());
+      if (uniqueAreas.length) {
+        const areaResult = await supabase.from("agreserge_areas").upsert(uniqueAreas.map(({ area, group }) => ({
+          id: areaIdFor(area),
+          nombre: area,
+          entidad_id: entityId,
+          tipo: group === "asistencial" ? "Asistencial" : "Administrativo",
+          updated_at: new Date().toISOString(),
+        })), { onConflict: "id" });
+        if (areaResult.error) throw areaResult.error;
+      }
       const userRows = leaders.map(({ nombre, area, group }) => {
         const usuario = slug(nombre);
         const current = existing.find((u: any) => slug(u.nombre) === usuario);
@@ -351,10 +366,11 @@ export async function POST(request: Request) {
           nombre,
           usuario: current?.usuario || usuario,
           correo: current?.correo || `${usuario}@agreserge.local`,
-          clave_hash: current ? undefined : hashPassword("Agreserge2026!"),
+          clave_hash: hashPassword("Agreserge2026!"),
           rol: "Líder de Proceso",
           tipo: group === "asistencial" ? "Asistencial" : "Administrativo",
           entidad_id: entityId,
+          area_id: areaIdFor(area),
           activo: true,
           cargo: area,
           updated_at: new Date().toISOString(),
@@ -363,6 +379,14 @@ export async function POST(request: Request) {
       if (userRows.length) {
         const usersResult = await supabase.from("agreserge_users").upsert(userRows, { onConflict: "id" });
         if (usersResult.error) throw usersResult.error;
+      }
+      for (const { area } of uniqueAreas) {
+        const leader = userRows.find((row: any) => row.area_id === areaIdFor(area));
+        if (!leader) continue;
+        const areaLeaderResult = await supabase.from("agreserge_areas")
+          .update({ lider_id: leader.id, updated_at: new Date().toISOString() })
+          .eq("id", areaIdFor(area));
+        if (areaLeaderResult.error) throw areaLeaderResult.error;
       }
 
       const currentObligationsResult = await supabase.from("agreserge_report_obligations")
@@ -427,6 +451,17 @@ export async function POST(request: Request) {
         ciudad: "Valle del Cauca",
         updated_at: new Date().toISOString(),
       });
+      const refreshedDb = await loadDB();
+      const openPeriods = await supabase.from("agreserge_report_periods")
+        .select("*, entity:agreserge_entities(*)")
+        .eq("entidad_id", entityId)
+        .neq("estado", "Cerrado");
+      if (openPeriods.error) throw openPeriods.error;
+      let synchronizedPeriods = 0;
+      for (const period of openPeriods.data || []) {
+        await syncPeriodStructure({ supabase, db: refreshedDb, actor, period });
+        synchronizedPeriods += 1;
+      }
       return NextResponse.json({
         ok: true,
         usersCreated: userRows.length,
@@ -434,6 +469,8 @@ export async function POST(request: Request) {
         obligations: config.obligations.length,
         annexes: config.obligations.reduce((total, obligation) => total + obligation.annexes.length, 0),
         directSupports: config.obligations.filter((obligation) => !obligation.annexes.length).length,
+        areas: uniqueAreas.length,
+        synchronizedPeriods,
       });
     }
 

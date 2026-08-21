@@ -19,6 +19,7 @@ import {
   Lock,
   LogOut,
   Mail,
+  MessageCircle,
   Plus,
   Save,
   Settings,
@@ -277,6 +278,7 @@ const modulos = [
   "Asignación mensual",
   "Nómina y comprobantes",
   "Solicitudes y firmas",
+  "Soporte técnico",
   "Trámites administrativos",
   "Permisos por perfil",
   "Usuarios y claves",
@@ -535,7 +537,14 @@ const seed = (): DB => ({
       "Inicio",
       "Mis agremiados",
       "Informes de actividades",
-      "Solicitudes y firmas",
+      "Soporte técnico",
+      "AGREBOT",
+    ],
+    "Líder de Proceso": [
+      "Inicio",
+      "Mis agremiados",
+      "Informes de actividades",
+      "Soporte técnico",
       "AGREBOT",
     ],
     "Coordinador de Proceso AGRESERGE": [
@@ -881,6 +890,7 @@ function Content(p: any) {
   if (nav === "Asignación mensual") return <AsignacionMensual {...p} />;
   if (nav === "Nómina y comprobantes") return <NominaComprobantes {...p} />;
   if (nav === "Solicitudes y firmas") return <SolicitudesFirmas {...p} />;
+  if (nav === "Soporte técnico") return <SoporteTecnico {...p} />;
   if (nav === "Trámites administrativos")
     return <TramitesAdministrativos {...p} />;
   if (nav === "Permisos por perfil") return <Permisos {...p} />;
@@ -888,6 +898,32 @@ function Content(p: any) {
   if (nav === "AGREBOT") return <Agrebot {...p} />;
   if (nav === "Auditoría") return <Auditoria {...p} />;
   return null;
+}
+function SoporteTecnico({ session }: any) {
+  const texto = encodeURIComponent(
+    `Hola, necesito soporte técnico con el Portal AGRESERGE. Mi nombre es ${session?.nombre || ""}.`,
+  );
+  const whatsapp = `https://wa.me/573058126749?text=${texto}`;
+  return (
+    <div className="grid">
+      <section className="card span12">
+        <span className="welcomeTag">Ayuda institucional</span>
+        <h2>Soporte técnico</h2>
+        <p>
+          Escríbenos por WhatsApp si necesitas ayuda para ingresar, cargar o
+          previsualizar tu informe de actividades.
+        </p>
+        <a
+          className="btn primary"
+          href={whatsapp}
+          target="_blank"
+          rel="noreferrer"
+        >
+          <MessageCircle size={18} /> Abrir soporte en WhatsApp
+        </a>
+      </section>
+    </div>
+  );
 }
 function Inicio({ session, db }: any) {
   const docs = db.documentos[session.id] || [];
