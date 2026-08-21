@@ -320,6 +320,9 @@ export function TechnicalProfiles({
     const clean = {
       ...profile,
       userId: target.id,
+      estadoCivil: val("estadoCivil"),
+      rh: val("rh"),
+      tipoSangre: val("tipoSangre"),
       datosAdicionales: {
         ...extra,
         perfilSociodemograficoCompletado: true,
@@ -377,8 +380,9 @@ export function TechnicalProfiles({
       )
     : "";
   const val = (key: string) => profile[key] ?? extra[key] ?? "";
+  const databaseFields = new Set(["documento", "fechaNacimiento", "direccion", "barrio", "municipio", "sexo", "estadoCivil", "eps", "tipoSangre", "lugarExpedicion", "lugarNacimiento", "departamento", "fechaIngreso", "estadoLaboral", "formacion", "proceso", "tipoContrato", "rh"]);
   const setVal = (key: string, value: any) =>
-    key in profile || required.includes(key)
+    key in profile || required.includes(key) || databaseFields.has(key)
       ? update(key, value)
       : updateExtra(key, value);
   const imprimirFicha = () => {
@@ -544,6 +548,12 @@ export function TechnicalProfiles({
           <Select
             value={val("tipoSangre")}
             set={(v) => setVal("tipoSangre", v)}
+            options={["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", "No conoce"]}
+          />
+          <L>RH</L>
+          <Select
+            value={val("rh")}
+            set={(v) => setVal("rh", v)}
             options={["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", "No conoce"]}
           />
           <L>Régimen</L>
